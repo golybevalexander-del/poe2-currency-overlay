@@ -196,6 +196,7 @@ html, body {
 #settings:not(.hidden) ~ #networth-root,
 #settings:not(.hidden) ~ #regex-root,
 #settings:not(.hidden) ~ #grandex-root,
+#settings:not(.hidden) ~ #barter-root,
 #settings:not(.hidden) ~ #support-bar { display: none !important; }
 
 .set-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 10px; flex-shrink: 0; }

@@ -434,7 +434,7 @@ function tutDom() {
       `<span class="tut-left"><button id="tut-back" class="tut-nav" title="${t('tutorial.modal.back_button')}">←</button><span id="tut-dots"></span></span>` +
       `<span class="tut-btns"><button id="tut-skip-step" class="hidden">${t('tutorial.modal.skip_step_button')}</button>` +
       `<button id="tut-next" class="mini-btn">${t('tutorial.modal.next_button')}</button></span></div>` +
-      `<div id="tut-dismiss"><span id="tut-later">${t('tutorial.modal.dismiss_later')}</span>` +
+      `<div id="tut-dismiss"><span id="tut-later">${t('barter.tutorial_close')}</span>` +
       `<span id="tut-never">${t('tutorial.modal.dismiss_never')}</span></div>`;
     document.body.appendChild(card);
     document.getElementById('tut-next').addEventListener('click', () => tutAdvance());
@@ -750,8 +750,12 @@ async function startTutorial(section = 'currency') {
   tutAdvance();
 }
 
-// mode: 'complete' | 'later' (re-offers next launch) | 'never'
+// Explicit Settings tutorial actions can replay; dismissal never auto-reopens.
 function endTutorial(mode) {
+  if (config && !config.tutorialDismissed) {
+    window.TutorialStartPolicy.dismiss(config);
+    window.api.setTutorialDismissed().catch((err) => console.error('Cannot save tutorial dismissal:', err));
+  }
   tutActive = false;
   clearInterval(tutTimer);
   tutTimer = null;
@@ -918,9 +922,9 @@ function showTutFarewell() {
     });
   });
   window.api.onShown(() => {
-    if (config && !config.tutorialDone && !tutActive) {
+    if (window.TutorialStartPolicy.shouldAutoStart(config, tutActive)) {
       setTimeout(() => {
-        if (config && !config.tutorialDone && !tutActive) startTutorial();
+        if (window.TutorialStartPolicy.shouldAutoStart(config, tutActive)) startTutorial();
       }, 600);
     }
   });

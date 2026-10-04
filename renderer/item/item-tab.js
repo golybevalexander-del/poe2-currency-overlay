@@ -263,7 +263,10 @@
     root.appendChild(backRow);
     const card = cel('div', 'cur-card');
     const head = cel('div', 'cur-head');
-    if (state.item.currencyIcon) { const img = cel('img', 'cur-icon'); img.src = state.item.currencyIcon; img.onerror = () => img.remove(); head.appendChild(img); }
+    const currencyIcon = window.exchangeItemIconUrl({
+      text: state.item.currencyName, apiId: state.item.currencyTag, icon: state.item.currencyIcon
+    });
+    if (currencyIcon) { const img = cel('img', 'cur-icon'); img.src = currencyIcon; img.onerror = () => img.remove(); head.appendChild(img); }
     head.appendChild(cel('div', 'cur-name', cesc(state.item.currencyName || '')));
     card.appendChild(head);
     const r = state.currencyResult;
@@ -2691,6 +2694,15 @@
     return [mk('Bramble Coil', 2, 'divine', 0.92, 2), mk('Dusk Signet', 4, 'divine', 1.04, 1), mk('Sovereign Band', 7, 'divine', 1.12, 5)];
   }
   window.ItemTab = {
+    async prepareExchangeLookup(text) { await ensureInit(text); },
+    async exchangeClipboardName(text) {
+      await ensureInit(text);
+      const parsed = window.EE2.parse(text);
+      if (!parsed.ok || !parsed.item.info) return null;
+      const name = parsed.item.info.refName || parsed.item.info.name;
+      return /^Uncut (Skill|Spirit|Support) Gem$/.test(name) && Number.isInteger(parsed.item.gemLevel)
+        ? `${name} (Level ${parsed.item.gemLevel})` : name;
+    },
     resolveLeague,
     // re-render from current state with no changes of its own - used when a
     // global setting the render reads (e.g. currencyIcons) flips while this
@@ -2767,6 +2779,7 @@
   // reorderable. Order + visibility persist in config.
   const TAB_META = [
     { key: 'currency', id: 'tab-currency', closeable: false },
+    { key: 'barter', id: 'tab-barter', closeable: true },
     { key: 'items', id: 'tab-items', closeable: false },
     { key: 'desec', id: 'tab-desecrate', closeable: true },
     { key: 'networth', id: 'tab-networth', closeable: true },
@@ -2774,7 +2787,7 @@
     { key: 'grandex', id: 'tab-grandex', closeable: true },
   ];
   const metaOf = (key) => TAB_META.find((t) => t.key === key);
-  const tabVis = { desec: true, regex: true, grandex: true, networth: true };
+  const tabVis = { barter: true, desec: true, regex: true, grandex: true, networth: true };
   let tabOrder = TAB_META.map((t) => t.key);
 
   function activeKey() {
@@ -2896,6 +2909,8 @@
     try { window.api.setActiveTab(which); } catch {}
     $('tab-items').classList.toggle('active', which === 'items');
     $('tab-currency').classList.toggle('active', which === 'currency');
+    $('tab-barter').classList.toggle('active', which === 'barter');
+    $('barter-root').classList.toggle('hidden', which !== 'barter');
     $('tab-desecrate').classList.toggle('active', which === 'desec');
     const nwTab = $('tab-networth'); if (nwTab) nwTab.classList.toggle('active', which === 'networth');
     const rxTab = $('tab-regex'); if (rxTab) rxTab.classList.toggle('active', which === 'regex');
@@ -2919,11 +2934,13 @@
     if (which === 'networth' && window.NetWorth) window.NetWorth.render();
     if (which === 'regex' && window.RegexTab) window.RegexTab.render();
     if (which === 'grandex' && window.GrandEx) window.GrandEx.render();
+    if (which === 'barter' && window.DirectBarter) window.DirectBarter.render();
   }
 
   // ---------- wiring ----------
   window.addEventListener('DOMContentLoaded', async () => {
     $('tab-currency').addEventListener('click', () => setTab('currency'));
+    $('tab-barter').addEventListener('click', () => setTab('barter'));
     $('tab-items').addEventListener('click', () => setTab('items'));
     $('tab-desecrate').addEventListener('click', () => setTab('desec'));
     { const t = $('tab-networth'); if (t) t.addEventListener('click', () => setTab('networth')); }
@@ -2935,12 +2952,14 @@
     window.api.getConfig().then((c) => {
       state.itemHotkey = c.itemHotkey;
       tabVis.desec = c.showDesecrateTab !== false;
+      tabVis.barter = c.showBarterTab !== false;
       tabVis.regex = c.showRegexTab !== false;
       tabVis.grandex = c.showGrandExTab !== false;
       tabVis.networth = c.showNetWorthTab !== false;
       tabOrder = normalizeOrder(c.tabOrder);
       applyTabOrder();
-      let last = ['currency', 'items', 'desec', 'networth', 'regex', 'grandex'].includes(c.lastTab) ? c.lastTab : 'currency';
+      let last = ['currency', 'barter', 'items', 'desec', 'networth', 'regex', 'grandex'].includes(c.lastTab) ? c.lastTab : 'currency';
+      if (last === 'barter' && !tabVis.barter) last = 'currency';
       // never reopen INTO a hidden tab
       if ((last === 'desec' && !tabVis.desec) || (last === 'regex' && !tabVis.regex) || (last === 'grandex' && !tabVis.grandex) || (last === 'networth' && !tabVis.networth)) last = 'currency';
       setTab(last);
@@ -2987,10 +3006,14 @@
     // price-check hotkey in game: main copied the hovered item and showed the
     // overlay - jump straight to the Items tab with it parsed and searching
     if (window.api.onItemCopied) {
-      window.api.onItemCopied((text) => { setTab(true); tryParse(text); });
+      window.api.onItemCopied((text) => {
+        if (window.DirectBarter && window.ExchangeItemLookup.routeToBarter(activeKey())) { window.DirectBarter.capture(text); return; }
+        setTab(true); tryParse(text);
+      });
     }
     if (window.api.onItemCopyFailed) {
       window.api.onItemCopyFailed(() => {
+        if (window.DirectBarter && window.ExchangeItemLookup.routeToBarter(activeKey())) { window.DirectBarter.copyFailed(); return; }
         setTab(true);
         const hk = String(state.itemHotkey || 'Ctrl+F').replace(/Control|CommandOrControl/g, 'Ctrl');
         state.notice = t('itemtab.notice.copy_failed', { hotkey: hk });

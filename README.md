@@ -4,6 +4,45 @@
 
 # POE2 Currency Overlay
 
+**Direct Barter fork:** this checkout adds a separate historical Direct Barter tab.
+See [Direct Barter usage and Windows testing](docs/DIRECT-BARTER.md). It uses an
+isolated `POE2 Direct Barter Fork` profile; upstream updates, remote feed switchover,
+feedback and sample uploads are disabled. No installer for this fork has been
+published. The upstream download links below do **not** contain this feature.
+Original POE2 VibeTools attribution and GPL-3.0-or-later licensing are retained.
+
+### Fork maintenance instructions
+
+Repo-local agent **`upstream-release-maintainer`** reconciles newer upstream
+releases while preserving Direct Barter. Its core skills are
+**`adapt-direct-barter-ui`** (integration and regression map) and
+**`create-fork-pr`** (reviewed publication to this fork only).
+
+Select the agent in a supporting Copilot host and ask, for example:
+"Compare the latest upstream release with this fork, propose a scoped
+reconciliation branch, and preserve Direct Barter using adapt-direct-barter-ui.
+Do not commit or publish." For later publication, explicitly authorize:
+"Use create-fork-pr to commit the reviewed changes, push this feature branch,
+and open a PR in golybevalexander-del/poe2-currency-overlay only."
+
+The separate **`prepare-upstream-pr`** skill is opt-in: ask
+"Use prepare-upstream-pr to assess an upstream contribution; do not publish."
+Preparation and upstream draft publication need explicit scope/authorization.
+It keeps one draft per contribution, not one after every fork merge, and
+separates reusable changes from fork-only identity/update settings.
+
+Definitions live in [the agent profile](.github/agents/upstream-release-maintainer.agent.md),
+[UI adaptation skill](.github/skills/adapt-direct-barter-ui/SKILL.md), and
+[fork PR skill](.github/skills/create-fork-pr/SKILL.md), plus the opt-in
+[upstream contribution skill](.github/skills/prepare-upstream-pr/SKILL.md).
+They do not run on a
+schedule. Discovery depends on the host and checked-out branch; if absent,
+reload/start a session on the feature branch or ask Copilot to read those files.
+Availability on the default branch requires landing the relevant files there;
+new local edits are not published until committed and pushed. No publication
+is authorized merely by adding or selecting these instructions. Host-level
+discovery and opt-in controls have not been verified in this session.
+
 A hotkey overlay for **Path of Exile 2**: live currency exchange rates and arbitrage, an item price checker, and a Desecrate (Omen of Light) EV calculator. Press a hotkey, it appears over the game; press it again and it's gone.
 
 Windows, built with Electron. It reads public data only — no game memory hooks, no automation, nothing that touches the game client.

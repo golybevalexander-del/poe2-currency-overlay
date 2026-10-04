@@ -1,5 +1,5 @@
 {
-  "name": "poe2-price-overlay",
+  "name": "poe2-direct-barter-fork",
   "version": "3.0.7",
   "description": "Hotkey-toggled currency price overlay for Path of Exile 2 - live rates, arbitrage signals, 7d trends",
   "main": "main.js",
@@ -15,11 +15,14 @@
     "i18n:check": "node scripts/i18n-verify.mjs && node scripts/i18n-check-translation.mjs",
     "i18n:build": "node scripts/i18n-merge.mjs && node scripts/i18n-ground-labels.mjs --write && node scripts/i18n-pseudo.mjs",
     "i18n:strict": "node scripts/i18n-verify.mjs && node scripts/i18n-check-translation.mjs --strict",
-    "test:reprice": "node dev/test-reprice-rules.js"
+    "test:reprice": "node dev/test-reprice-rules.js",
+    "test:barter": "node --test direct-barter/*.test.js",
+    "test:barter-smoke": "electron scripts/smoke-direct-barter.js",
+    "test:barter-ux": "electron scripts/smoke-barter-ux.js"
   },
   "build": {
-    "appId": "com.poe2vibetools.overlay",
-    "productName": "POE2 Currency Overlay",
+    "appId": "com.golybevalexander.poe2directbarter",
+    "productName": "POE2 Direct Barter Fork",
     "directories": {
       "output": "dist"
     },
@@ -33,6 +36,7 @@
       "cx-feed.js",
       "cx-map.json",
       "cx-catalog.json",
+      "direct-barter/**",
       "renderer/**",
       "app.ico",
       "package.json"
@@ -46,24 +50,18 @@
       "target": "AppImage",
       "icon": "docs/icon.png",
       "category": "Utility",
-      "artifactName": "POE2-Currency-Overlay.AppImage",
+      "artifactName": "POE2-Direct-Barter-Fork.AppImage",
       "executableArgs": [
         "--ozone-platform=x11"
       ]
     },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "POE2-VibeTools",
-        "repo": "poe2-currency-overlay"
-      }
-    ],
+    "publish": null,
     "nsis": {
       "oneClick": true,
       "perMachine": false,
       "deleteAppDataOnUninstall": false,
       "runAfterFinish": true,
-      "artifactName": "POE2-Currency-Overlay-Setup.exe",
+      "artifactName": "POE2-Direct-Barter-Fork-Setup.exe",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
@@ -73,7 +71,7 @@
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "https://github.com/POE2-VibeTools/poe2-currency-overlay.git"
+    "url": "https://github.com/golybevalexander-del/poe2-currency-overlay.git"
   },
   "devDependencies": {
     "electron": "^43.1.1",
