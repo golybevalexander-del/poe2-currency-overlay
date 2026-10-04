@@ -1792,6 +1792,9 @@ window.currencyIconUrl = (apiId) => {
   const id = apiId === 'ex' ? 'exalted' : apiId === 'div' ? 'divine' : apiId;
   return (catalog && catalog[id] && catalog[id].icon) || '';
 };
+window.exchangeItemIconUrl = (item) => window.ExchangeItemLookup.icon(
+  item.text, item.apiId, window.EE2, window.currencyIconUrl(item.apiId) || item.icon
+);
 // `<img class="cur-icon-inline">` for apiId's icon (title/alt = full display
 // name), or null when the toggle is off or no icon is known - callers keep
 // their own text fallback in that case. (-inline, not .cur-icon: that class is
@@ -2928,6 +2931,7 @@ async function initSettings() {
   sel.addEventListener('change', async () => {
     config.league = sel.value;
     await window.api.setLeague(sel.value);
+    if (window.DirectBarter) window.DirectBarter.leagueChanged();
     fullCatalog = null;
     catalog = {};
     refresh(true);
@@ -3021,8 +3025,8 @@ async function initSettings() {
     });
   };
   // a tab's own ✕ hides it too - keep the matching Settings switch in sync
-  const TAB_TOGGLE_ID = { regex: 'show-regex-tab', grandex: 'show-grandex-tab', networth: 'show-networth-tab', desec: 'show-desecrate-tab' };
-  const TAB_TOGGLE_CFG = { regex: 'showRegexTab', grandex: 'showGrandExTab', networth: 'showNetWorthTab', desec: 'showDesecrateTab' };
+  const TAB_TOGGLE_ID = { barter: 'show-barter-tab', regex: 'show-regex-tab', grandex: 'show-grandex-tab', networth: 'show-networth-tab', desec: 'show-desecrate-tab' };
+  const TAB_TOGGLE_CFG = { barter: 'showBarterTab', regex: 'showRegexTab', grandex: 'showGrandExTab', networth: 'showNetWorthTab', desec: 'showDesecrateTab' };
   window.setTabToggleChecked = (visKey, checked) => {
     const t = $(TAB_TOGGLE_ID[visKey]);
     if (t) t.checked = !!checked;
@@ -3058,6 +3062,7 @@ async function initSettings() {
   wireTabToggle('show-grandex-tab', 'showGrandExTab', 'grandex');
   wireTabToggle('show-networth-tab', 'showNetWorthTab', 'networth');
   wireTabToggle('show-desecrate-tab', 'showDesecrateTab', 'desec');
+  wireTabToggle('show-barter-tab', 'showBarterTab', 'barter');
 
   // Live-rate sliders (Tab-visible + Background). 4 stops: quiet/low/medium/high.
   const RATE_KEYS = ['quiet', 'low', 'medium', 'high'];
@@ -3450,7 +3455,8 @@ function openFeedback(kind) {
   $('fb-contact').value = '';
   $('fb-status').textContent = '';
   $('fb-status').className = 'fb-status';
-  $('fb-send').disabled = false;
+  $('fb-send').disabled = true;
+  $('fb-status').textContent = t('barter.feedback_disabled');
   logAction(`open ${fbKind} form`);
   $('feedback-modal').classList.remove('hidden');
   $('fb-details').focus();
@@ -3614,7 +3620,10 @@ async function main() {
     clearDropMarkers();
   });
 
-  $('btn-refresh').addEventListener('click', () => { logAction('refresh (manual)'); refresh(true); });
+  $('btn-refresh').addEventListener('click', () => {
+    if ($('tab-barter').classList.contains('active') && window.DirectBarter) window.DirectBarter.refresh();
+    else { logAction('refresh (manual)'); refresh(true); }
+  });
   $('btn-hide').addEventListener('click', () => window.api.hide());
   // the nav rail is a SWITCHER, not a scroll-jump: it shows one section card at a
   // time (the content is short enough that scrolling to a section did nothing).
@@ -3797,9 +3806,7 @@ async function main() {
   // tab (never on startup, never in the background, never on Price Check/Desecrate).
   const reportVisibleTab = () => {
     const active = document.querySelector('#tabs .tab.active');
-    const which = !active ? 'items'
-      : active.id === 'tab-currency' ? 'currency'
-      : active.id === 'tab-desecrate' ? 'desec' : 'items';
+    const which = !active ? 'items' : active.id === 'tab-desecrate' ? 'desec' : active.id.replace('tab-', '');
     try { window.api.setActiveTab(which); } catch {}
   };
   if (window.api.onShown) window.api.onShown(reportVisibleTab);

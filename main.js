@@ -1,6 +1,7 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, Tray, Menu, nativeImage, shell, Notification, protocol, desktopCapturer, screen, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const FORK_BUILD = true;
 const focusNative = require('./focus-native'); // lazy inside - koffi binds on first use
 const linuxFocus = require('./linux-focus'); // the Linux half: xdotool when present, else "can't tell"
 // Stash net-worth reader runs in a worker (renderer/stash/reader-worker.js); main
@@ -13,12 +14,10 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'ee2', privileges: { standard: true, supportFetchAPI: true, corsEnabled: true } }
 ]);
 
-// Packaged builds get their own settings folder. Without this, Electron derives
-// userData from package.json "name" and the installed app SHARES the dev copy's
-// folder - dev test runs could clobber a real user's config.
-if (app.isPackaged) {
-  app.setPath('userData', path.join(app.getPath('appData'), 'POE2 Currency Overlay'));
-}
+// The fork must never read, migrate, or overwrite an installed upstream profile.
+app.setName('POE2 Direct Barter Fork');
+app.setPath('userData', path.join(app.getPath('appData'), 'POE2 Direct Barter Fork'));
+if (process.platform === 'win32') app.setAppUserModelId('com.golybevalexander.poe2directbarter');
 
 // EXPERIMENTAL Linux support: force the X11/XWayland Ozone backend. Native Wayland
 // can't keep an always-on-top click-through overlay layered over a fullscreen game,
@@ -75,6 +74,7 @@ const FEED_CHECK_MS = 15 * 60 * 1000; // on load + every 15 minutes
 let liveFeed = null; // { base, upstream } when active
 
 async function checkFeed() {
+  if (FORK_BUILD) return; // Public providers only; no upstream remote switchover.
   const before = liveFeed ? liveFeed.base : null;
   try {
     const mRes = await fetch(`${FEED_MANIFEST_URL}?t=${Date.now()}`, {
@@ -141,6 +141,7 @@ function cmpVer(a, b) {
 
 // fallback: version notice only, button opens the download page
 async function checkUpdateManual() {
+  if (FORK_BUILD) return; // Never offer an upstream replacement.
   try {
     const res = await fetch(RELEASES_API, {
       headers: { 'User-Agent': USER_AGENT, Accept: 'application/vnd.github+json' },
@@ -158,6 +159,7 @@ async function checkUpdateManual() {
 }
 
 function initUpdates() {
+  if (FORK_BUILD) return; // Deliberately disabled for this unpublished fork.
   if (app.isPackaged) {
     try {
       const { autoUpdater } = require('electron-updater');
@@ -277,16 +279,19 @@ const DEFAULT_CONFIG = {
   itemRanges: {},  // learned per-stat roll bounds from fetched listings (slider bounds)
   garbagePool: [], // user-curated worthless-mod stat ids (starts empty by design)
   tutorialDone: false,
+  tutorialDismissed: false,
   lastSeenVersion: null, // last app version whose "what's new" popup was shown+dismissed
   // the league "Auto" last resolved to. When a new league/event goes live it takes
   // the top of every league list and Auto silently follows it - players still in
   // the old league would price against the wrong market with no hint. A change
   // here raises a one-time banner (see league-auto-changed).
   lastAutoLeague: null,
-  lastTab: 'currency',   // tab to reopen on (remembered across restarts): 'currency' | 'items' | 'desec' | 'networth' | 'regex' | 'grandex'
+  lastTab: 'currency',   // tab to reopen on (remembered across restarts)
   // user's tab-bar order (drag to reorder). Unknown/missing keys fall back to
   // the built-in order, so adding a tab in a future version can't break it.
-  tabOrder: ['currency', 'items', 'desec', 'networth', 'regex', 'grandex'],
+  tabOrder: ['currency', 'barter', 'items', 'desec', 'networth', 'regex', 'grandex'],
+  showBarterTab: true,
+  barterMode: 'sell',
 
   // fresh installs start empty: the first-run tutorial builds the Exalted bucket
   // hands-on; skipping the tutorial seeds the standard bucket instead (renderer)
@@ -326,7 +331,7 @@ function loadConfig() {
   try {
     // migrate from the legacy shared folder used by packaged builds before 1.2.7
     const legacy = path.join(app.getPath('appData'), 'poe2-price-overlay', 'overlay-config.json');
-    if (app.isPackaged && fs.existsSync(legacy)) {
+    if (!FORK_BUILD && app.isPackaged && fs.existsSync(legacy)) {
       return { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(legacy, 'utf8')) };
     }
   } catch {}
@@ -1064,7 +1069,12 @@ const ITEM_TEXT_MARKERS = [
 ];
 const looksLikeItemText = (t) => !!t && ITEM_TEXT_MARKERS.some((m) => t.includes(m));
 
+let activeUiTab = 'currency';
 async function onItemHotkey(mode = 'pin', acc = null) {
+  if (win && win.isFocused() && activeUiTab === 'barter') {
+    win.webContents.send('barter-focus-search');
+    return;
+  }
   if (itemHotkeyBusy) return;
   itemHotkeyBusy = true;
   logToggle('item-hotkey', `press mode=${mode} winFocused=${!!(win && win.isFocused())}`);
@@ -1226,12 +1236,13 @@ function createTray() {
     icon = nativeImage.createFromBuffer(Buffer.from(TRAY_ICON_B64, 'base64'));
   }
   tray = new Tray(icon);
-  tray.setToolTip(`POE2 Currency Overlay v${app.getVersion()}${DEV_TAG} (${config.hotkey})`);
+  tray.setToolTip(`POE2 Direct Barter Fork v${app.getVersion()}${DEV_TAG} (${config.hotkey})`);
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Show / Hide overlay', click: () => toggleOverlay('tray-menu') },
       {
-        label: 'Check for updates',
+        label: 'Updates disabled (local fork)',
+        enabled: false,
         click: () => {
           showOverlay();
           if (autoUpdaterRef) autoUpdaterRef.checkForUpdates().catch(() => {});
@@ -1289,6 +1300,11 @@ ipcMain.handle('set-tutorial-done', () => {
   saveConfig();
   return true;
 });
+ipcMain.handle('set-tutorial-dismissed', () => {
+  config.tutorialDismissed = true;
+  saveConfig();
+  return true;
+});
 
 // remember the version whose "what's new" popup the user just dismissed, so it
 // never fires again until the next update bumps app.getVersion() past this
@@ -1336,7 +1352,7 @@ ipcMain.handle('set-hotkey', (_e, accelerator) => {
   if (ok) {
     config.hotkey = accelerator;
     saveConfig();
-    if (tray) tray.setToolTip(`POE2 Currency Overlay v${app.getVersion()}${DEV_TAG} (${config.hotkey})`);
+    if (tray) tray.setToolTip(`POE2 Direct Barter Fork v${app.getVersion()}${DEV_TAG} (${config.hotkey})`);
   }
   return ok;
 });
@@ -1385,6 +1401,25 @@ ipcMain.handle('fetch-catalog', async () => {
 // CX catalog (apiId -> {text, icon, category}) so the item tab can recognise
 // CX-only currency/fragments by name and route them to the exchange-value view.
 ipcMain.handle('get-cx-catalog', () => CX_CATALOG);
+
+const { HourProvider } = require('./direct-barter/provider');
+const { BarterService } = require('./direct-barter/service');
+const directBarter = new BarterService(new HourProvider(path.join(app.getPath('userData'), 'direct-barter-hours')));
+ipcMain.handle('direct-barter', async (_e, args = {}) => {
+  try {
+    const league = args.league || await resolveLeague();
+    return await directBarter.query({ ...args, league });
+  } catch (err) {
+    console.error('Direct Barter:', err);
+    return { error: err.message };
+  }
+});
+ipcMain.handle('set-barter-mode', (_e, mode) => {
+  if (!['sell', 'buy'].includes(mode)) throw new Error('Invalid Direct Barter mode');
+  config.barterMode = mode;
+  saveConfig();
+  return mode;
+});
 
 // Exchange value (in Exalted) for a CX-market item poe2scout doesn't list.
 // Accepts an apiId directly or a display name to resolve. Returns null when the
@@ -1952,6 +1987,7 @@ ipcMain.handle('reprice-samples-clear', () => { repriceSamples = []; return { ok
 // an unlabelled template cannot be baked, and guessing the label would poison the corpus
 // far worse than having no sample at all.
 ipcMain.handle('reprice-samples-send', async (_e, payload) => {
+  if (FORK_BUILD) return { ok: false, error: 'Upstream sample submissions are disabled in the Direct Barter fork.' };
   const truths = (payload && payload.truths) || {};
   const note = String((payload && payload.note) || '').slice(0, 300);
   const labelled = repriceSamples
@@ -2089,6 +2125,7 @@ ipcMain.handle('reprice-shot-preview', (_e, slot) => {
 // Sends the slots the user confirmed. All three or nothing: a set with a digit missing
 // cannot be baked, so a partial upload would only look like a contribution.
 ipcMain.handle('reprice-shot-send', async (_e, payload) => {
+  if (FORK_BUILD) return { ok: false, error: 'Upstream sample submissions are disabled in the Direct Barter fork.' };
   const slots = Array.isArray(payload && payload.slots) ? payload.slots.map(String) : [];
   if (REPRICE_SHOT_SLOTS.some((s) => !slots.includes(s) || !repriceShots[s])) {
     return { ok: false, error: 'need-all' };
@@ -2798,6 +2835,7 @@ ipcMain.handle('stash-sample-scope', async (_e, i, scope) => {
 });
 // Sends only what the user previewed and confirmed. One request per image.
 ipcMain.handle('stash-sample-send', async (_e, payload) => {
+  if (FORK_BUILD) return { ok: false, error: 'Upstream sample submissions are disabled in the Direct Barter fork.' };
   if (!sampleShots.length) return { ok: false, error: 'nothing to send' };
   const note = String((payload && payload.note) || '').slice(0, 500);
   const sent = [];
@@ -3140,6 +3178,7 @@ ipcMain.handle('set-tab-shown', (_e, which, shown) => {
   else if (which === 'grandex') config.showGrandExTab = !!shown;
   else if (which === 'networth') config.showNetWorthTab = !!shown;
   else if (which === 'desec') config.showDesecrateTab = !!shown;
+  else if (which === 'barter') config.showBarterTab = !!shown;
   else return false;
   saveConfig();
   return true;
@@ -3357,10 +3396,11 @@ ipcMain.handle('trade2-search-fetch', async (_e, { league, query, limit }) => {
 // while the Currency tab is open (see liveTick / currencyTabActive). Opening the
 // tab kicks an immediate refresh so the grid isn't stale for up to a full tick.
 ipcMain.on('active-tab', (_e, which) => {
+  activeUiTab = which;
   const wasActive = currencyTabActive;
   currencyTabActive = which === 'currency';
   // remember the tab so the app reopens on it next launch
-  if (config && ['currency', 'items', 'desec'].includes(which) && config.lastTab !== which) {
+  if (config && ['currency', 'items', 'desec', 'barter'].includes(which) && config.lastTab !== which) {
     config.lastTab = which;
     saveConfig();
   }
@@ -3397,6 +3437,7 @@ ipcMain.on('install-update', () => {
 // is a public endpoint (no secret), so validation/limits live in the script.
 const FEEDBACK_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzzeXIgPXcpZJG3BSnd-feEIQ-7G_-41IHnZHptENI3QvYeTi0zgFBQg_WG0GUXMru-/exec';
 ipcMain.handle('submit-feedback', async (_e, payload) => {
+  if (FORK_BUILD) return false; // Do not send fork feedback to upstream.
   try {
     if (!/^https:\/\/script\.google\.com\//.test(FEEDBACK_ENDPOINT)) return false;
     const body = JSON.stringify({
@@ -3475,7 +3516,7 @@ if (!gotLock) {
     try {
       const lnk = path.join(
         app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs',
-        'POE2 Currency Overlay.lnk'
+        'POE2 Direct Barter Fork.lnk'
       );
       if (!fs.existsSync(lnk)) {
         shell.writeShortcutLink(lnk, 'create', {

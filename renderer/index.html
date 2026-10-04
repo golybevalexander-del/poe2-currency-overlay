@@ -4,18 +4,19 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; connect-src 'self' ee2:; img-src 'self' https://web.poecdn.com data:; style-src 'self'; font-src 'self'" />
-  <title data-i18n="ui.app.window_title">POE2 Price Overlay</title>
+  <title data-i18n="barter.fork_title">POE2 Direct Barter Fork</title>
   <link rel="stylesheet" href="tokens.css" />
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="themes.css" />
   <link rel="stylesheet" href="item/item.css" />
+  <link rel="stylesheet" href="direct-barter.css" />
 </head>
 <body>
   <div id="root">
     <header id="titlebar">
       <div class="title-left">
         <span class="dot"></span>
-        <span class="app-title" data-i18n="ui.titlebar.app_title">POE2 Prices</span>
+        <span class="app-title" data-i18n="barter.fork_title">POE2 Direct Barter Fork</span>
         <span id="app-version" class="app-version"></span>
         <span id="league-label" class="league"></span>
       </div>
@@ -89,6 +90,7 @@
             <label class="switch set-excl" data-i18n-title="ui.settings.currency_icons_tooltip" title="Replace currency names/units with their icons next to prices on the Price Check and Desecrate tabs. Hover or screen readers still get the full name."><input type="checkbox" id="currency-icons" /><span class="sw-track"></span><span class="sw-lab" data-i18n="ui.settings.currency_icons_label">Show currency icons instead of names</span></label>
             <label class="switch set-excl" data-i18n-title="ui.settings.dyslexic_font_tooltip" title="Render the whole app in OpenDyslexic, a typeface designed to be easier to read with dyslexia. Bundled with the app; off by default."><input type="checkbox" id="dyslexic-font" /><span class="sw-track"></span><span class="sw-lab" data-i18n="ui.settings.dyslexic_font_label">Dyslexia-friendly font</span></label>
             <label class="switch set-excl" data-i18n-title="ui.settings.show_regex_tab_tooltip" title="Show the Regex tab in the tab bar. Off hides it entirely until you turn it back on here."><input type="checkbox" id="show-regex-tab" /><span class="sw-track"></span><span class="sw-lab" data-i18n="ui.settings.show_regex_tab_label">Show Regex tab</span></label>
+            <label class="switch set-excl"><input type="checkbox" id="show-barter-tab" /><span class="sw-track"></span><span class="sw-lab" data-i18n="barter.show_tab">Show Direct Barter tab</span></label>
             <label class="switch set-excl" data-i18n-title="ui.settings.show_grandex_tab_tooltip" title="Show the Grand Expedition tab in the tab bar. Off hides it entirely until you turn it back on here."><input type="checkbox" id="show-grandex-tab" /><span class="sw-track"></span><span class="sw-lab" data-i18n="ui.settings.show_grandex_tab_label">Show Grand Expedition tab</span></label>
             <label class="switch set-excl" data-i18n-title="ui.settings.show_networth_tab_tooltip" title="Show the Net Worth tab in the tab bar. Off hides it entirely until you turn it back on here. The capture hotkey still works either way."><input type="checkbox" id="show-networth-tab" /><span class="sw-track"></span><span class="sw-lab" data-i18n="ui.settings.show_networth_tab_label">Show Net Worth tab</span></label>
             <label class="switch set-excl" data-i18n-title="ui.settings.show_desecrate_tab_tooltip" title="Show the Desecrate tab in the tab bar. Off hides it - it still appears when you open an item's redesecrate? button, then hides again when you leave it."><input type="checkbox" id="show-desecrate-tab" /><span class="sw-track"></span><span class="sw-lab" data-i18n="ui.settings.show_desecrate_tab_label">Show Desecrate tab</span></label>
@@ -300,6 +302,7 @@
 
     <nav id="tabs" class="tabs">
       <button id="tab-currency" class="tab active" data-i18n="ui.tabs.currency_label" data-i18n-title="ui.tabs.currency_tooltip" title="Currency prices, best-value payments and arbitrage">Currency</button>
+      <button id="tab-barter" class="tab" data-i18n="barter.tab" data-i18n-title="barter.disclaimer">Direct Barter</button>
       <button id="tab-items" class="tab" data-i18n="ui.tabs.pricecheck_label" data-i18n-title="ui.tabs.pricecheck_tooltip" title="Price-check items: hover one in game and press your price-check hotkey (default Ctrl+F)">Price Check</button>
       <button id="tab-desecrate" class="tab" data-i18n="ui.tabs.desecrate_label" data-i18n-title="ui.tabs.desecrate_tooltip" title="Is this item worth Omen of Light + bone rerolling? Load an item from Price Check, or paste one here with Ctrl+V.">Desecrate</button>
       <button id="tab-networth" class="tab" data-i18n="ui.tabs.networth_label" data-i18n-title="ui.tabs.networth_tooltip" title="Value your currency tabs: open a tab in game, click Capture, and it reads the counts and totals what they're worth.">Net Worth</button>
@@ -324,6 +327,7 @@
     <main id="regex-root" class="hidden"></main>
 
     <main id="grandex-root" class="hidden"></main>
+    <main id="barter-root" class="hidden"></main>
 
     <div id="support-bar">
       <span id="btn-bug" class="support-bug" role="button" tabindex="0" data-i18n-title="ui.support.bug_tooltip" title="Report a bug (attaches a short activity log)">
@@ -414,6 +418,7 @@
        there. Other renderer scripts call t() at load time, so the language has to be
        settled before them. -->
   <script src="i18n/en.js"></script>
+  <script src="i18n/barter-en.js"></script>
   <script src="i18n/ru.js"></script>
   <script src="i18n/pt.js"></script>
   <script src="i18n/de.js"></script>
@@ -426,6 +431,12 @@
   <script src="release-notes.js"></script>
   <script src="reprice-rules.js"></script>
   <script src="renderer.js"></script>
+  <script src="exchange-item-lookup.js"></script>
+  <script src="direct-barter-sort.js"></script>
+  <script src="direct-barter-presentation.js"></script>
+  <script src="direct-barter-search.js"></script>
+  <script src="direct-barter.js"></script>
+  <script src="tutorial-start-policy.js"></script>
   <script src="tutorial.js"></script>
   <script src="item-tab.bundle.js"></script>
   <script src="item/query.js"></script>

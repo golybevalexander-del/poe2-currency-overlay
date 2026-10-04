@@ -1,4 +1,18 @@
-# Privacy & data
+# Direct Barter fork notice
+
+This fork uses a separate `POE2 Direct Barter Fork` app/profile identity and does
+not migrate the upstream profile. Upstream automatic updates, remote feed
+switchover, feedback and sample submission endpoints are disabled.
+Direct Barter makes read-only public requests to GGG's `web.poecdn.com` hourly
+Currency Exchange digests and `api.poe2scout.com` metadata/leagues endpoints.
+Completed-hour responses are cached locally under the fork profile for up to 72
+hours; JSON export is a user-initiated local download. Names/icons from Scout are
+not market evidence. No Direct Barter game automation is implemented.
+The following upstream policy is retained for attribution and describes the
+original application; the disabled submission/update behaviors do not apply to
+this fork.
+
+# Privacy & data (upstream reference)
 
 _Last updated: 2026-08-14_
 

@@ -19,6 +19,7 @@ const RENDERER = path.join(ROOT, "renderer");
 const catalogSrc = fs.readFileSync(path.join(RENDERER, "i18n", "en.js"), "utf8");
 const sandbox = { window: {} };
 new Function("window", catalogSrc)(sandbox.window);
+new Function("window", fs.readFileSync(path.join(RENDERER, "i18n", "barter-en.js"), "utf8"))(sandbox.window);
 const en = sandbox.window.I18N_CATALOGS.en;
 const known = new Set(Object.keys(en));
 
