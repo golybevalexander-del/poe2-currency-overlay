@@ -110,6 +110,8 @@ function neighbors(graph, selectedId, mapping) {
       target: itemById.get(targetId), rateBPerA,
       quantityA: pair.completeQuantities[selectedId] ? pair.quantities[selectedId] : null,
       quantityB: pair.completeQuantities[targetId] ? pair.quantities[targetId] : null,
+      tradedQuantityA: quantity(pair.tradedQuantities[selectedId]),
+      tradedQuantityB: quantity(pair.tradedQuantities[targetId]),
       latestObservationAt: records[0].observedAt,
       activity: rateBPerA == null ? 'recorded' : 'traded',
       valuation: valuation(targetId, graph, mapping), records

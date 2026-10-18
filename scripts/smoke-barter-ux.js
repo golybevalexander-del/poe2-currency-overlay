@@ -8,6 +8,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 const { BarterService } = require('../direct-barter/service');
 let mode = 'sell', queries = 0, holding = false;
 let warning = '';
+if (process.env.BARTER_UX_SCREENSHOTS) app.disableHardwareAcceleration();
 protocol.registerSchemesAsPrivileged([{ scheme: 'ee2', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
 const pending = [];
 const selected = 'Metadata/Items/Gems/ReservationGemUncut8';
@@ -58,21 +59,56 @@ app.whenReady().then(async () => {
   let win;
   try {
     win = new BrowserWindow({ show: false, webPreferences: {
-      preload: path.join(__dirname, 'fixtures', 'barter-ux-preload.js'), contextIsolation: true, nodeIntegration: false
+      preload: path.join(__dirname, 'fixtures', 'barter-ux-preload.js'), contextIsolation: true, nodeIntegration: false,
+      offscreen: !!process.env.BARTER_UX_SCREENSHOTS
     } });
     await win.loadFile(path.join(__dirname, 'fixtures', 'barter-ux.html'));
     const js = (code) => win.webContents.executeJavaScript(code);
+    const screenshot = async (name) => {
+      if (process.env.BARTER_UX_SCREENSHOTS) {
+        await fs.writeFile(path.join(process.env.BARTER_UX_SCREENSHOTS, `${name}.png`), (await win.webContents.capturePage()).toPNG());
+      }
+    };
+    const topHeight = () => js(`document.getElementById('barter-results').getBoundingClientRect().top - document.getElementById('barter-root').getBoundingClientRect().top`);
     await js('window.DirectBarter.render()');
     await waitFor(() => js(`document.getElementById('barter-refresh') && !document.getElementById('barter-refresh').disabled`), 'initial data');
+    assert.equal(await js(`document.getElementById('barter-ratio-filter').getClientRects().length`), 0);
+    assert.equal(await js(`document.getElementById('barter-show-recorded').getClientRects().length`), 0);
+    assert.equal(await js(`document.getElementById('barter-export').getClientRects().length`), 0);
+    const emptyTopHeight = await topHeight();
+    assert.ok(emptyTopHeight <= 110, `unselected controls use ${emptyTopHeight}px`);
+    await screenshot('barter-compact-empty');
+    for (const query of ['vilentas propulsion', 'uruks smelting', 'arakaalis lust']) {
+      await js(`document.getElementById('barter-search').value=${JSON.stringify(query)}; document.getElementById('barter-search').dispatchEvent(new Event('input'))`);
+      await waitFor(() => js(`Array.from(document.querySelectorAll('.barter-choice img')).some(n=>n.complete && n.naturalWidth>0 && n.src.includes('/gen/image/'))`), `shared gem icon: ${query}`);
+    }
     await js(`document.getElementById('barter-search').value='Unc 8'; document.getElementById('barter-search').dispatchEvent(new Event('input'))`);
     const names = await js(`Array.from(document.querySelectorAll('.barter-choice')).map(n=>n.textContent)`);
     assert.equal(names.length, 2);
     assert.ok(names.every((name) => name.includes('(Level 8)') && !name.includes('(Level 18)')));
-    await js(`Array.from(document.querySelectorAll('.barter-choice')).find(n=>n.textContent.includes('Spirit')).click()`);
+    await js(`document.getElementById('barter-search').focus(); document.getElementById('barter-search').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));`);
+    assert.equal(await js(`document.getElementById('barter-search').getAttribute('aria-activedescendant')`), 'barter-choice-1');
+    await js(`document.getElementById('barter-search').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))`);
     await waitFor(() => js(`!!document.querySelector('.barter-table') && !document.getElementById('barter-refresh').disabled`), 'selected markets');
+    assert.equal(await js(`document.getElementById('barter-search').getClientRects().length`), 0);
+    assert.ok(await js(`document.getElementById('barter-ratio-filter').getClientRects().length > 0`));
+    const selectedTopHeight = await topHeight();
+    assert.ok(selectedTopHeight <= 180, `selected controls use ${selectedTopHeight}px`);
+    await screenshot('barter-compact-selected');
+    win.setSize(420, 650); await delay(100);
+    assert.ok(await js(`['barter-primary', 'barter-result-controls'].every(id=>document.getElementById(id).scrollWidth <= document.getElementById(id).clientWidth + 1)`), 'narrow toolbar must not overflow horizontally');
+    await screenshot('barter-compact-narrow');
+    win.setSize(800, 600); await delay(100);
+    const unchangedQueries = queries;
+    await js(`document.getElementById('barter-change').click()`);
+    assert.ok(await js(`document.getElementById('barter-search').getClientRects().length > 0`));
+    assert.equal(await js(`document.activeElement.id`), 'barter-search');
+    await js(`document.getElementById('barter-search').dispatchEvent(new KeyboardEvent('keydown', {key:'Escape',bubbles:true}))`);
+    assert.equal(await js(`document.getElementById('barter-search').getClientRects().length`), 0);
+    assert.equal(queries, unchangedQueries);
     await waitFor(() => js(`Array.from(document.querySelectorAll('#barter-selected img, .barter-table img')).filter(n=>n.src.includes('Uncut')).every(n=>n.complete && n.naturalWidth>0)`), 'official gem PNG decoding');
     const icons = await js(`Array.from(document.querySelectorAll('#barter-selected img, .barter-table img')).map(n=>({url:n.src,width:n.naturalWidth}))`);
-    assert.ok(icons.filter((icon) => icon.url.includes('Uncut')).length >= 2);
+    assert.ok(icons.filter((icon) => icon.url.includes('Uncut')).length >= 1);
     assert.equal(await js(`document.querySelectorAll('#barter-results details, #barter-results summary').length`), 0);
     assert.equal(await js(`Array.from(document.querySelectorAll('.barter-rate')).find(n=>n.textContent==='34.25').title`),
       '1 Uncut Spirit Gem (Level 8) for 34.25 Divine Orb (historical)');
@@ -85,7 +121,11 @@ app.whenReady().then(async () => {
     assert.equal(await js(`document.querySelector('.barter-table tbody tr').children[3].title`),
       '1 Uncut Spirit Gem (Level 8) received : 34.25 Divine Orb paid (historical average, buying:selling).');
     assert.equal(await js(`!!document.getElementById('barter-coverage') || !!document.getElementById('barter-hours')`), false);
-    assert.equal(await js(`document.querySelectorAll('.barter-table th').length`), 5);
+    assert.equal(await js(`document.querySelectorAll('.barter-table th').length`), 6);
+    assert.equal(await js(`document.getElementById('barter-show-recorded').checked`), false);
+    assert.equal(await js(`document.querySelectorAll('.barter-table tbody tr').length`), 1);
+    assert.equal(await js(`document.querySelector('.barter-trading-volume').textContent`), '411');
+    assert.ok(await js(`document.querySelector('.barter-trading-volume').title.includes('not number of trades')`));
     assert.ok(await js(`!document.getElementById('barter-root').textContent.includes('Choose a specific item')`));
     await js(`document.dispatchEvent(new KeyboardEvent('keydown', {ctrlKey:true,key:'f',bubbles:true}))`);
     assert.equal(await js(`document.activeElement.id`), 'barter-search');
@@ -94,8 +134,16 @@ app.whenReady().then(async () => {
     assert.equal(await js(`document.getElementById('barter-mode').value`), 'buy');
     await js(`window.DirectBarter.capture('Item Class: Helmets\\nRarity: Rare\\nFancy Helmet\\n--------')`);
     assert.ok(await js(`document.getElementById('barter-errors').textContent.includes('not a recognized exchange item')`));
-    assert.equal(await js(`document.querySelector('.barter-table th button').textContent.startsWith('Exalted per payment item')`), true);
-    await js(`document.querySelector('.barter-table th button').click()`);
+    assert.equal(await js(`document.querySelector('.barter-table th:nth-child(3) button').textContent.startsWith('Exalted per payment item')`), true);
+    await js(`document.getElementById('barter-show-recorded').checked=true; document.getElementById('barter-show-recorded').dispatchEvent(new Event('change'))`);
+    assert.equal(await js(`document.querySelectorAll('.barter-table tbody tr').length`), 2);
+    await js(`document.querySelector('.barter-table th:nth-child(5) button').click()`);
+    assert.equal(await js(`document.querySelector('.barter-table th:nth-child(5)').getAttribute('aria-sort')`), 'descending');
+    assert.equal(await js(`document.querySelector('.barter-table tbody tr:first-child .barter-trading-volume').textContent`), '411');
+    await js(`document.querySelector('.barter-table th:nth-child(5) button').click()`);
+    assert.equal(await js(`document.querySelector('.barter-table tbody tr:first-child .barter-trading-volume').textContent`), '0');
+    await waitFor(() => js(`Array.from(document.querySelectorAll('#barter-selected img, .barter-table img')).filter(n=>n.src.includes('Uncut')).length >= 2 && Array.from(document.querySelectorAll('#barter-selected img, .barter-table img')).filter(n=>n.src.includes('Uncut')).every(n=>n.complete && n.naturalWidth>0)`), 'revealed zero-trade gem PNG decoding');
+    await js(`document.querySelector('.barter-table th:nth-child(3) button').click()`);
     assert.equal(await js(`document.querySelector('.barter-table tbody tr:last-child td:nth-child(3)').textContent`), 'Unpriced');
     await js(`document.getElementById('barter-filter').value='unc14'; document.getElementById('barter-filter').dispatchEvent(new Event('input'))`);
     assert.equal(await js(`document.querySelectorAll('.barter-table tbody tr').length`), 1);
@@ -111,6 +159,7 @@ app.whenReady().then(async () => {
     assert.equal(await js(`document.getElementById('barter-search').value`), '');
     assert.equal(await js(`document.getElementById('barter-filter').value`), '');
     assert.equal(await js(`document.getElementById('barter-export').disabled`), true);
+    assert.equal(await js(`document.getElementById('barter-result-controls').getClientRects().length`), 0);
     assert.equal(await js(`document.activeElement.id`), 'barter-search');
     await js(`window.fixture.control('release')`); await delay(250);
     assert.equal(await js(`document.querySelectorAll('.barter-table').length`), 0);
@@ -143,7 +192,8 @@ app.whenReady().then(async () => {
     assert.ok(await js(`document.getElementById('barter-filter').placeholder.includes('payment')`));
     console.log(JSON.stringify({ status: 'PASS', names, icons, buySell: 'correct rate/quantities/unit valuation',
       details: 'hidden', clearDuringLoad: 'PASS, no extra request or stale repopulation', lateMode: 'PASS',
-      modeRestoration: 'PASS', note: 'Isolated real-Electron fixture; no user profile/hotkey changes' }, null, 2));
+      modeRestoration: 'PASS', compactLayout: { emptyTopHeight, selectedTopHeight, narrowWidth: 420 },
+      note: 'Isolated real-Electron fixture; no user profile/hotkey changes' }, null, 2));
     win.destroy(); await fs.rm(directory, { recursive: true, force: true }); app.exit(0);
   } catch (err) {
     console.error(err.stack);

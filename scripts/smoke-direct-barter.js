@@ -36,6 +36,7 @@ app.whenReady().then(async () => {
     restoreMode = () => js(`window.api.setBarterMode(${JSON.stringify(originalMode)})`);
     await js(`document.getElementById('notes-modal').classList.add('hidden'); document.getElementById('tab-barter').click();`);
     await waitFor(() => js(`document.getElementById('barter-search') && !document.getElementById('barter-refresh').disabled`), 'GGG coverage');
+    await js(`document.getElementById('barter-show-recorded').checked=true; document.getElementById('barter-show-recorded').dispatchEvent(new Event('change'))`);
     await js(`document.getElementById('barter-mode').value='sell'; document.getElementById('barter-mode').dispatchEvent(new Event('change'))`);
     const coverage = await js(`({errors: document.getElementById('barter-errors').textContent, league: document.getElementById('barter-league').textContent})`);
     assert.equal(await js(`!!document.getElementById('barter-coverage') || !!document.getElementById('barter-hours')`), false);
@@ -43,7 +44,7 @@ app.whenReady().then(async () => {
     await waitFor(() => js(`document.getElementById('barter-search').value === 'Greater Iron Rune'`), 'Barter item-copied route');
     assert.equal(await js(`document.getElementById('tab-barter').classList.contains('active')`), true);
     win.webContents.send('item-copy-failed');
-    await waitFor(() => js(`document.getElementById('barter-errors').textContent.includes('Could not capture')`), 'Barter copy failure');
+    await waitFor(() => js(`document.getElementById('barter-errors').textContent.includes('game did not provide')`), 'Barter copy failure');
     assert.equal(await js(`document.getElementById('tab-barter').classList.contains('active')`), true);
     win.webContents.send('barter-focus-search');
     await waitFor(() => js(`document.activeElement.id === 'barter-search'`), 'local focus IPC');
@@ -62,9 +63,9 @@ app.whenReady().then(async () => {
     await js(`document.querySelector('#barter-selected .barter-icon').dispatchEvent(new Event('error'))`);
     assert.equal(await js(`!!document.querySelector('#barter-selected .barter-icon')`), false);
     assert.ok(await js(`document.getElementById('barter-selected').textContent.includes('Selling: Greater Iron Rune')`));
-    assert.equal(await js(`document.querySelector('.barter-table th[aria-sort]').getAttribute('aria-sort')`), 'ascending');
-    await js(`document.querySelector('.barter-table th button').click()`);
-    assert.equal(await js(`document.querySelector('.barter-table th[aria-sort]').getAttribute('aria-sort')`), 'descending');
+    assert.equal(await js(`document.querySelector('.barter-table th:nth-child(3)').getAttribute('aria-sort')`), 'ascending');
+    await js(`document.querySelector('.barter-table th:nth-child(3) button').click()`);
+    assert.equal(await js(`document.querySelector('.barter-table th:nth-child(3)').getAttribute('aria-sort')`), 'descending');
     await js(`document.getElementById('barter-filter').value = ${JSON.stringify(targetNames[0])}; document.getElementById('barter-filter').dispatchEvent(new Event('input'));`);
     assert.equal(await js(`document.querySelectorAll('#barter-results details').length`), 0);
     const download = new Promise((resolve, reject) => {

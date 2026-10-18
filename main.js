@@ -1211,7 +1211,8 @@ async function onItemHotkey(mode = 'pin', acc = null) {
       if (cleared && before) clipboard.writeText(before); // put their clipboard back
       // manual-workflow fallback (Ctrl+Alt+C then hotkey) - but never text we
       // already consumed, which would silently re-search the previous item
-      if (looksLikeItemText(before) && before !== lastConsumedItemText) text = before;
+      // Barter must not mistake an old inventory copy for an uncopyable exchange entry.
+      if (activeUiTab !== 'barter' && looksLikeItemText(before) && before !== lastConsumedItemText) text = before;
     }
     if (!overlayShown) showOverlay();
     if (win) win.webContents.send('overlay-temp-mode', mode === 'temp');

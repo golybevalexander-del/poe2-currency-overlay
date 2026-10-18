@@ -2,7 +2,7 @@
 (function (root) {
   function icon(name, apiId, database, catalogIcon) {
     if (database && database.ready) {
-      const entries = database.itemByRef('ITEM', name) || [];
+      const entries = ['ITEM', 'GEM'].flatMap((namespace) => database.itemByRef(namespace, name) || []);
       const entry = entries.find((item) => !apiId || item.tradeTag === apiId) || entries[0];
       if (entry && entry.icon) return entry.icon;
     }

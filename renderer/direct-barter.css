@@ -1,4 +1,20 @@
-#barter-root { padding: 14px; overflow: auto; flex: 1; min-height: 0; }
+#barter-root { padding: 10px; overflow: auto; flex: 1; min-height: 0; }
+#barter-root [hidden] { display: none !important; }
+.barter-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.barter-context { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; color: var(--tx-dim); font-size: 11px; }
+.barter-context > :not(:first-child):not(:empty)::before { content: "\00b7"; margin-right: 8px; }
+.barter-context-league:empty { display: none; }
+.barter-item-picker { position: relative; flex: 1 1 240px; min-width: 0; }
+.barter-history-control, .barter-ratio-control { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.barter-history-control { flex-shrink: 0; }
+.barter-suggestions {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 30;
+  background: var(--s-card); border: 1px solid var(--bd-16); border-radius: 4px;
+  box-shadow: 0 6px 16px #0006;
+}
 #barter-root input, #barter-root select {
   background: var(--field-bg); color: var(--tx-body); border: 1px solid var(--bd-16);
   padding: 6px 8px; border-radius: 4px; font: inherit;
@@ -8,11 +24,16 @@
 }
 .barter-choice { background: var(--s-card); color: var(--tx-body); border: 1px solid var(--bd-12); border-radius: 4px; cursor: pointer; }
 .barter-choice:hover { background: var(--s-band); }
-.barter-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
-.barter-toolbar input { flex: 1; min-width: 200px; }
+.barter-choice-active { background: var(--s-band); outline: 2px solid var(--am); outline-offset: -2px; }
+.barter-recorded-toggle { display: flex; align-items: center; gap: 6px; margin: 4px 0 6px; font-size: 12px; }
+.barter-trading-volume { cursor: help; }
+.barter-trading-volume.hot { color: var(--am); font-weight: 600; }
+.barter-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+.barter-filter-row > input { flex: 1 1 180px; min-width: 0; width: auto; }
 .barter-search { width: 100%; box-sizing: border-box; }
-.barter-choices { max-height: 180px; overflow: auto; display: grid; gap: 4px; margin: 8px 0; }
-.barter-choice { text-align: left; display: flex; align-items: center; gap: 8px; padding: 6px; }
+.barter-choices { max-height: 200px; overflow: auto; display: grid; gap: 3px; margin: 0; }
+.barter-choice { text-align: left; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; }
+.barter-choice > span:not(.barter-icon-slot) { min-width: 0; overflow-wrap: anywhere; }
 .barter-choice-id { color: var(--tx-dim); overflow-wrap: anywhere; font-size: 10px; }
 .barter-icon { width: 24px; height: 24px; object-fit: contain; vertical-align: middle; margin-right: 5px; }
 .barter-icon-slot {
@@ -20,18 +41,21 @@
   vertical-align: middle; color: var(--tx-dim); margin-right: 5px;
 }
 .barter-icon-slot .barter-icon { margin-right: 0; }
-.barter-note { color: var(--tx-dim); font-size: 12px; margin: 8px 0; overflow-wrap: anywhere; }
+.barter-note { color: var(--tx-dim); font-size: 11px; margin: 4px 6px; overflow-wrap: anywhere; }
 .barter-selected {
-  display: flex; align-items: center; gap: 8px; padding: 10px 12px; margin: 10px 0;
+  display: flex; align-items: center; gap: 6px; padding: 4px 6px; margin: 0; min-height: 30px; box-sizing: border-box;
   color: var(--tx-hi); background: var(--s-band); border: 1px solid var(--am);
-  border-radius: 5px; font-size: 16px; font-weight: 700; overflow-wrap: anywhere;
+  border-radius: 4px; font-size: 13px; font-weight: 600; overflow-wrap: anywhere;
 }
+.barter-selected-name { flex: 1; min-width: 0; }
+.barter-selected > button { flex-shrink: 0; }
 .barter-selected:empty { display: none; }
-.barter-selected .barter-icon { width: 36px; height: 36px; flex-shrink: 0; }
-.barter-selected .barter-icon-slot { width: 36px; height: 36px; }
-.barter-clear { margin-left: auto; font-size: 20px; }
+.barter-selected .barter-icon { width: 24px; height: 24px; flex-shrink: 0; }
+.barter-selected .barter-icon-slot { width: 24px; height: 24px; }
+.barter-clear { font-size: 16px; }
 .barter-rate { cursor: help; }
 .barter-warning { color: var(--red-hi); white-space: pre-wrap; overflow-wrap: anywhere; }
+.barter-warning:empty { display: none; }
 .barter-table-wrap { overflow-x: auto; }
 .barter-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .barter-table th, .barter-table td { padding: 7px; border-bottom: 1px solid var(--bd-12); text-align: left; vertical-align: top; }
@@ -40,4 +64,4 @@
 .barter-estimated { color: var(--warn); }
 .barter-raw { max-height: 260px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; user-select: text; }
 .barter-empty { padding: 14px 0; }
-.barter-heading { margin: 0 0 8px; font-size: 16px; }
+.barter-heading { margin: 0; font-size: 12px; font-weight: 600; color: var(--tx-body); }

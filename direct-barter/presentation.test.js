@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { exchangeQuantities, rateText, rateTooltip, rowView, averageRatio } = require('../renderer/direct-barter-presentation');
+const { exchangeQuantities, rateText, rateTooltip, rowView, averageRatio, matchesAverageRatio } = require('../renderer/direct-barter-presentation');
 const window = { I18N_CATALOGS: { en: {} } };
 new Function('window', fs.readFileSync(path.join(__dirname, '../renderer/i18n/barter-en.js'), 'utf8'))(window);
 const translate = (key, vars = {}) => window.I18N_CATALOGS.en[`barter.${key}`]
@@ -47,6 +47,33 @@ test('buy payment orientation is reciprocal of selected received per payment, no
   assert.equal(rateTooltip(0.5, 'Rune', 'Divine Orb', translate, 'en-US', 'buy'),
     'Pay 1 Divine Orb for 2 Rune (historical)');
   assert.equal(rowView({ rateBPerA: null, quantityA: 0, quantityB: 0 }, 'buy').rate, null);
+});
+
+test('average-ratio filters use original quantities and follow Buy/Sell orientation', () => {
+  const rows = [
+    { quantityA: 2, quantityB: 1, rateBPerA: 0.5 },
+    { quantityA: 2, quantityB: 2, rateBPerA: 1 },
+    { quantityA: 1, quantityB: 2, rateBPerA: 2 },
+    { quantityA: 1, quantityB: 1.00001, rateBPerA: 1.00001 },
+    { quantityA: 0, quantityB: 0, rateBPerA: null }
+  ];
+  const matches = (mode, filter) => rows.flatMap((row, i) => matchesAverageRatio(row, mode, filter) ? [i] : []);
+  assert.deepEqual(matches('sell', 'all'), [0, 1, 2, 3, 4]);
+  assert.deepEqual(matches('sell', 'below'), [0]);
+  assert.deepEqual(matches('sell', 'equal'), [1]);
+  assert.deepEqual(matches('sell', 'above'), [2, 3]);
+  assert.deepEqual(matches('buy', 'below'), [2, 3]);
+  assert.deepEqual(matches('buy', 'equal'), [1]);
+  assert.deepEqual(matches('buy', 'above'), [0]);
+  assert.deepEqual(matches('buy', 'no_history'), [4]);
+  assert.equal(averageRatio(rows[3], 'sell').first, '1');
+  for (const quantityA of [null, undefined, -1, Infinity, NaN]) {
+    const invalid = { quantityA, quantityB: 2, rateBPerA: 2 };
+    assert.equal(matchesAverageRatio(invalid, 'sell', 'all'), true);
+    assert.equal(matchesAverageRatio(invalid, 'sell', 'no_history'), true);
+    for (const filter of ['below', 'equal', 'above']) assert.equal(matchesAverageRatio(invalid, 'sell', filter), false);
+  }
+  assert.throws(() => matchesAverageRatio(rows[0], 'sell', 'invalid'), /Invalid average-ratio filter/);
 });
 
 test('screenshot rate uses actual item names and accurate rounded quantities, never fabricated 1:1', () => {

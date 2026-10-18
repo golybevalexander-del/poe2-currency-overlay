@@ -108,3 +108,51 @@ test('3/24 hours stay bounded and isolated; metadata cannot introduce direct edg
   assert.equal(long.rows.length, 0);
   assert.ok(!long.items.some((i) => i.text === 'Synthetic Rune'));
 });
+
+test('missing lesser items are searchable offline with exact identities and recorded-only neighbors', async () => {
+  const { search } = require('../renderer/direct-barter-search');
+  const essence = 'Metadata/Items/Currency/CurrencyLesserEssenceMana';
+  const rune = 'Metadata/Items/SoulCores/RuneLifeRecoveryLesser';
+  const ex = 'Metadata/Items/Currency/CurrencyAddModToRare';
+  const service = new BarterService({
+    async hour(hour) {
+      return { hour, fetchedAt: NOW, markets: [{
+        league: 'Specific', market_pair: [essence, ex], volume_traded: { [essence]: 2, [ex]: 1 }
+      }] };
+    },
+    async prune() {}
+  }, { now: () => NOW, fetchImpl: async () => { throw new Error('Scout offline'); } });
+  const data = await service.query({ league: 'Specific', selectedId: essence });
+  for (const [id, name, queries] of [
+    [essence, 'Lesser Essence of the Mind', ['Lesser Essence of Mind', 'lesser mind', 'mind essence lesser']],
+    [rune, 'Lesser Rebirth Rune', ['Lesser Rebirth Rune', 'lesser rebirth', 'rebirth rune lesser']]
+  ]) {
+    const item = data.items.find((item) => item.id === id);
+    assert.equal(item.text, name);
+    assert.match(item.icon, /^https:\/\/web\.poecdn\.com\//);
+    assert.equal(item.metadataSource, 'Bundled catalog');
+    for (const query of queries) assert.ok(search(data.items, query).some((match) => match.item.id === id));
+    assert.deepEqual(search(data.items, id).map((match) => match.item.id), [id]);
+  }
+  assert.deepEqual(data.rows.map((row) => row.target.id), [ex]);
+  assert.equal(data.rows[0].rateBPerA, 0.5);
+  const unrecorded = await service.query({ league: 'Specific', selectedId: rune });
+  assert.deepEqual(unrecorded.rows, []);
+  const other = await service.query({ league: 'Other', selectedId: essence });
+  assert.deepEqual(other.rows, []);
+});
+
+test('exact Scout Metadata IDs extend picker coverage without inventing historical markets', async () => {
+  const id = 'Metadata/Items/Test/NewExchangeItem';
+  const service = new BarterService({
+    async hour(hour) { return { hour, fetchedAt: NOW, markets: [] }; },
+    async prune() {}
+  }, { now: () => NOW, fetchImpl: async () => response([{
+    CurrencyOne: { ApiId: 'new-exchange-item', Text: 'New Exchange Item', BaseItemTypeId: id },
+    CurrencyTwo: { ApiId: 'unnamed-metadata', Text: 'No exact identity' }
+  }]) });
+  const data = await service.query({ league: 'Specific', selectedId: id });
+  assert.equal(data.items.find((item) => item.id === id).text, 'New Exchange Item');
+  assert.ok(!data.items.some((item) => item.text === 'No exact identity'));
+  assert.deepEqual(data.rows, []);
+});

@@ -1,6 +1,6 @@
 {
   "name": "poe2-direct-barter-fork",
-  "version": "3.0.7",
+  "version": "3.0.7-barter.1",
   "description": "Hotkey-toggled currency price overlay for Path of Exile 2 - live rates, arbitrage signals, 7d trends",
   "main": "main.js",
   "scripts": {
@@ -38,6 +38,9 @@
       "cx-catalog.json",
       "direct-barter/**",
       "renderer/**",
+      "LICENSE",
+      "PRIVACY.md",
+      "README.md",
       "app.ico",
       "package.json"
     ],

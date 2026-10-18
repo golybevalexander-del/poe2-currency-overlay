@@ -24,6 +24,8 @@ test('reverse orientation, historical rate and target unit valuation are indepen
   assert.equal(row.valuation.value, 5); // NOT the 15 Exalted proceeds from 1 A.
   assert.equal(row.quantityA, 2);
   assert.equal(row.quantityB, 6);
+  assert.equal(row.tradedQuantityA, 2);
+  assert.equal(row.tradedQuantityB, 6);
   assert.equal(neighbors(g, 'B', map).find((r) => r.target.id === 'A').rateBPerA, 1 / 3);
   assert.equal(row.valuation.kind, 'direct');
 });
@@ -69,6 +71,8 @@ test('one-sided and invalid records cannot fabricate or skew rates from valid tr
   assert.equal(row.rateBPerA, 2);
   assert.equal(row.quantityA, null);
   assert.equal(row.quantityB, 152);
+  assert.equal(row.tradedQuantityA, 1);
+  assert.equal(row.tradedQuantityB, 2);
   assert.equal(row.records.length, 3);
 });
 
@@ -89,6 +93,37 @@ test('sort both ways keeps unpriced last and deterministic ties; JSON preserves 
   assert.deepEqual(sortRows(rows).map((r) => r.target.id), ['C', 'A', 'B', 'Y', 'Z']);
   assert.deepEqual(sortRows(rows, 'desc').map((r) => r.target.id), ['A', 'B', 'C', 'Y', 'Z']);
   assert.equal(JSON.parse(JSON.stringify(rows))[0].valuation.value, null);
+});
+
+test('target sorting is alphabetical in both directions regardless of valuation', () => {
+  const row = (id, text, value) => ({ target: { id, text }, valuation: { value } });
+  const rows = [row('Z', 'Zebra', 1), row('A2', 'Apple', null), row('M', 'Middle', 7), row('A1', 'Apple', 9)];
+  assert.deepEqual(sortRows(rows, 'asc', 'target').map((row) => row.target.id), ['A1', 'A2', 'M', 'Z']);
+  assert.deepEqual(sortRows(rows, 'desc', 'target').map((row) => row.target.id), ['Z', 'M', 'A1', 'A2']);
+  assert.deepEqual(rows.map((row) => row.target.id), ['Z', 'A2', 'M', 'A1']);
+});
+
+test('volume sorting uses raw quantities with unknown/invalid volumes last in both directions', () => {
+  const row = (id, volume) => ({ target: { id, text: id }, tradedQuantityB: volume, valuation: { value: 1 } });
+  const rows = [row('Unknown', null), row('Million', 1000000), row('Thousand', 1000),
+    row('TenThousand', 10000), row('Zero', 0), row('TieB', 1000), row('TieA', 1000),
+    row('Invalid', NaN), row('Infinite', Infinity), row('Negative', -1), row('Missing', undefined)];
+  const asc = sortRows(rows, 'asc', 'trading_volume').map((row) => row.target.id);
+  assert.deepEqual(asc.slice(0, 6), ['Zero', 'Thousand', 'TieA', 'TieB', 'TenThousand', 'Million']);
+  const desc = sortRows(rows, 'desc', 'trading_volume').map((row) => row.target.id);
+  assert.deepEqual(desc.slice(0, 6), ['Million', 'TenThousand', 'Thousand', 'TieA', 'TieB', 'Zero']);
+  assert.deepEqual(asc.slice(6), desc.slice(6));
+});
+
+test('zero-volume records have zero valid traded units and overflow is unknown, not fabricated', () => {
+  const zero = neighbors(graph(market('A', 'B', 0, 0)), 'A', map)[0];
+  assert.equal(zero.tradedQuantityA, 0);
+  assert.equal(zero.tradedQuantityB, 0);
+  const overflow = scan([hour([market('A', 'B', 1e308, 1e308)]),
+    hour([market('A', 'B', 1e308, 1e308)], 7200)], 'League', map, catalog);
+  const row = neighbors(overflow, 'A', map)[0];
+  assert.equal(row.tradedQuantityA, null);
+  assert.equal(row.tradedQuantityB, null);
 });
 
 test('Standard Iron Rune / Opiloti real recorded identity appears only when its older hour is covered', () => {

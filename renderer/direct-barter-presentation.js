@@ -55,7 +55,20 @@
       selling / minimum !== Math.round(selling / minimum * 100) / 100 };
   }
 
-  const api = { formatQuantity, exchangeQuantities, rateText, rateTooltip, rowView, averageRatio };
+  function matchesAverageRatio(row, mode, filter) {
+    if (filter === 'all') return true;
+    const ratio = averageRatio(row, mode);
+    if (filter === 'no_history') return ratio == null;
+    if (!ratio) return false;
+    switch (filter) {
+      case 'below': return ratio.buying < ratio.selling;
+      case 'equal': return ratio.buying === ratio.selling;
+      case 'above': return ratio.buying > ratio.selling;
+      default: throw new Error(`Invalid average-ratio filter: ${filter}`);
+    }
+  }
+
+  const api = { formatQuantity, exchangeQuantities, rateText, rateTooltip, rowView, averageRatio, matchesAverageRatio };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.BarterPresentation = api;
 })(typeof window === 'object' ? window : globalThis);

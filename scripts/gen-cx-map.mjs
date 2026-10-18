@@ -7,7 +7,8 @@
 // Sources: RePoE-poe2 base_items (metadata id -> name, icon art, item class) and,
 // for apiId continuity with existing user configs, the poe2scout catalog's ids
 // (generation-time only - the APP no longer talks to poe2scout). Items poe2scout
-// never knew get slugged apiIds. Re-run per league: node scripts/gen-cx-map.mjs
+// never knew get slugged apiIds. Previously cataloged items are retained even
+// when absent from the latest hour. Re-run per league: node scripts/gen-cx-map.mjs
 import fs from "node:fs";
 import path from "node:path";
 import https from "node:https";
@@ -61,14 +62,14 @@ const traded = new Set();
 for (const m of cx.markets || []) for (const p of m.market_pair || []) traded.add(p);
 console.log(`exchange-traded items (all leagues, ${hour}): ${traded.size}`);
 
-const map = {};
-const catalog = {};
+const map = JSON.parse(fs.readFileSync(path.join(ROOT, "cx-map.json"), "utf8"));
+const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "cx-catalog.json"), "utf8"));
 let fromScout = 0, slugged = 0, unknownMeta = 0;
 for (const meta of traded) {
   const info = baseItems[meta];
   if (!info || !info.name) { unknownMeta++; continue; }
   const scout = nameToApi.get(norm(info.name));
-  const apiId = scout ? scout.apiId : slug(info.name);
+  const apiId = map[meta] || (scout ? scout.apiId : slug(info.name));
   scout ? fromScout++ : slugged++;
   map[meta] = apiId;
   const art = info.visual_identity && info.visual_identity.dds_file;

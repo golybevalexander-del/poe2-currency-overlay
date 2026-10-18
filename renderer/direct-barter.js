@@ -5,6 +5,8 @@
   let data = null, selectedId = null, history = 3, direction = 'asc', requestId = 0, mounted = false;
   let busy = false, captureId = 0, pendingCapture = null;
   let mode = 'sell', modeTouched = false;
+  let sortKey = 'value', choiceIndex = -1;
+  let editingSelection = false;
   const modeKey = (key) => mode === 'buy' ? `buy_${key}` : key;
   const fmt = (n) => n == null ? text('unknown') : new Intl.NumberFormat(undefined, { maximumSignificantDigits: 6 }).format(n);
   const utc = (ms) => new Date(ms).toISOString().replace('T', ' ').replace('Z', ' UTC');
@@ -35,19 +37,35 @@
     selected.replaceChildren();
     const icon = image(item);
     if (icon) selected.append(icon);
-    selected.append(el('span', text(modeKey('selected'), { name: item.text })));
+    selected.append(el('span', text(modeKey('selected'), { name: item.text }), 'barter-selected-name'));
+    const change = el('button', text('change'), 'mini-btn'); change.type = 'button'; change.id = 'barter-change';
+    change.setAttribute('aria-label', text('change_selected')); change.addEventListener('click', beginSearch);
+    selected.append(change);
     const clear = el('button', '×', 'mini-btn barter-clear'); clear.type = 'button';
     clear.id = 'barter-clear'; clear.title = text('clear'); clear.setAttribute('aria-label', text('clear'));
     clear.addEventListener('click', clearSelection); selected.append(clear);
     selected.title = item.id;
+    syncSelection();
+  }
+  function syncSelection() {
+    const hasSelection = selectedId != null;
+    $('barter-selected').hidden = !hasSelection || editingSelection;
+    $('barter-search').hidden = hasSelection && !editingSelection;
+    $('barter-result-controls').hidden = !hasSelection;
+    $('barter-export').hidden = !hasSelection;
+  }
+  function beginSearch() {
+    mount(); editingSelection = true; syncSelection();
+    $('barter-search').focus(); $('barter-search').select(); showChoices();
   }
   function clearSelection() {
-    ++requestId; ++captureId; pendingCapture = null; selectedId = null; busy = false;
+    ++requestId; ++captureId; pendingCapture = null; selectedId = null; busy = false; editingSelection = false;
     if (data) data = { ...data, selectedId: null, rows: [] };
     $('barter-selected').replaceChildren(); $('barter-results').replaceChildren();
-    $('barter-filter').value = ''; $('barter-export').disabled = true;
+    $('barter-filter').value = ''; $('barter-ratio-filter').value = 'all';
+    $('barter-show-recorded').checked = false; $('barter-export').disabled = true;
     $('barter-refresh').disabled = false; $('barter-errors').textContent = dataWarnings();
-    $('barter-search').value = ''; showChoices(); $('barter-search').focus();
+    $('barter-search').value = ''; syncSelection(); showChoices(); $('barter-search').focus();
   }
   function paintMode() {
     if (!mounted) return;
@@ -65,11 +83,12 @@
     if (mounted) return;
     mounted = true;
     const root = $('barter-root');
-    root.append(el('h2', text('title'), 'barter-heading'), el('p', text('disclaimer'), 'barter-note'));
-    const league = el('p', '', 'barter-note'); league.id = 'barter-league';
-    root.append(league);
-    const modeBar = el('div', null, 'barter-toolbar');
-    const modeLabel = el('label', text('mode')); modeLabel.htmlFor = 'barter-mode';
+    const context = el('div', null, 'barter-context'); context.id = 'barter-context';
+    const league = el('span', '', 'barter-context-league'); league.id = 'barter-league';
+    context.append(el('h2', text('compact_title'), 'barter-heading'), league, el('span', text('disclaimer')));
+    root.append(context);
+    const toolbar = el('div', null, 'barter-toolbar barter-primary'); toolbar.id = 'barter-primary';
+    const modeLabel = el('label', text('mode'), 'barter-sr-only'); modeLabel.htmlFor = 'barter-mode';
     const modeSelect = el('select'); modeSelect.id = 'barter-mode';
     for (const value of ['sell', 'buy']) {
       const option = el('option', text(value)); option.value = value; modeSelect.append(option);
@@ -80,48 +99,110 @@
       try { await window.api.setBarterMode(mode); }
       catch (err) { $('barter-errors').textContent = text('error', { error: err.message }); }
     });
-    modeBar.append(modeLabel, modeSelect); root.append(modeBar);
-    const label = el('label', text(modeKey('select'))); label.htmlFor = 'barter-search'; label.id = 'barter-search-label';
+    toolbar.append(modeLabel, modeSelect);
+    const picker = el('div', null, 'barter-item-picker'); picker.id = 'barter-item-picker';
+    const label = el('label', text(modeKey('select')), 'barter-sr-only'); label.htmlFor = 'barter-search'; label.id = 'barter-search-label';
     const search = el('input', null, 'barter-search');
     search.id = 'barter-search'; search.placeholder = text('search'); search.autocomplete = 'off';
-    const count = el('p', '', 'barter-note'); count.id = 'barter-match-count';
+    search.setAttribute('role', 'combobox'); search.setAttribute('aria-autocomplete', 'list');
+    search.setAttribute('aria-controls', 'barter-choices'); search.setAttribute('aria-expanded', 'false');
+    const suggestions = el('div', null, 'barter-suggestions'); suggestions.id = 'barter-suggestions'; suggestions.hidden = true;
+    const count = el('p', '', 'barter-note'); count.id = 'barter-match-count'; count.setAttribute('aria-live', 'polite');
     const choices = el('div', null, 'barter-choices'); choices.id = 'barter-choices';
-    root.append(label, search, count, choices);
+    choices.setAttribute('role', 'listbox'); choices.setAttribute('aria-label', text('search_choices'));
+    suggestions.append(count, choices); picker.append(label, search, suggestions);
     search.addEventListener('input', showChoices);
     search.addEventListener('keydown', (e) => {
-      const buttons = choices.querySelectorAll('button');
-      if (e.key === 'Enter' && buttons.length === 1 && Number(buttons[0].dataset.matchScore) <= 1) buttons[0].click();
+      const buttons = Array.from(choices.querySelectorAll('button'));
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && buttons.length) {
+        e.preventDefault(); e.stopPropagation();
+        const next = choiceIndex < 0 ? (e.key === 'ArrowDown' ? 0 : buttons.length - 1) :
+          (choiceIndex + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
+        highlightChoice(next);
+      } else if (e.key === 'Enter') {
+        const button = choiceIndex >= 0 ? buttons[choiceIndex] :
+          buttons.length === 1 && Number(buttons[0].dataset.matchScore) <= 1 ? buttons[0] : null;
+        if (button) { e.preventDefault(); e.stopPropagation(); button.click(); }
+      } else if (e.key === 'Escape' && (!suggestions.hidden || (editingSelection && selectedId != null))) {
+        e.preventDefault(); e.stopPropagation(); closeChoices(); $('barter-match-count').textContent = '';
+        editingSelection = false; syncSelection();
+        if (selectedId) $('barter-change').focus();
+      }
     });
-    const selected = el('p', '', 'barter-selected'); selected.id = 'barter-selected';
-    selected.setAttribute('aria-live', 'polite'); root.append(selected);
-    const toolbar = el('div', null, 'barter-toolbar');
+    const selected = el('div', '', 'barter-selected'); selected.id = 'barter-selected';
+    selected.setAttribute('aria-live', 'polite'); selected.hidden = true; picker.append(selected);
+    toolbar.append(picker);
+    const historyControl = el('div', null, 'barter-history-control');
     const historyLabel = el('label', text('history')); historyLabel.htmlFor = 'barter-history';
     const select = el('select'); select.id = 'barter-history';
-    for (const [value, key] of [[3, 'three'], [24, 'day']]) {
+    for (const [value, key] of [[3, 'three_compact'], [24, 'day_compact']]) {
       const option = el('option', text(key)); option.value = String(value); select.append(option);
     }
     select.addEventListener('change', () => { history = Number(select.value); data = null; load(); });
-    const refresh = el('button', text('refresh'), 'mini-btn'); refresh.id = 'barter-refresh'; refresh.addEventListener('click', load);
+    select.title = text('history_help');
+    historyControl.append(historyLabel, select); toolbar.append(historyControl);
+    const refresh = el('button', '↻', 'mini-btn'); refresh.id = 'barter-refresh';
+    refresh.title = text('refresh'); refresh.setAttribute('aria-label', text('refresh')); refresh.addEventListener('click', load);
     const exportButton = el('button', text('export'), 'mini-btn'); exportButton.id = 'barter-export'; exportButton.disabled = true;
     exportButton.addEventListener('click', exportJson);
-    toolbar.append(historyLabel, select, refresh, exportButton); root.append(toolbar);
+    toolbar.append(refresh, exportButton); root.append(toolbar);
+    const resultControls = el('div', null, 'barter-result-controls'); resultControls.id = 'barter-result-controls';
+    const filterRow = el('div', null, 'barter-toolbar barter-filter-row');
     const filter = el('input', null, 'barter-search'); filter.id = 'barter-filter'; filter.placeholder = text(modeKey('filter'));
     filter.setAttribute('aria-label', text(modeKey('filter')));
     filter.addEventListener('input', showRows);
-    root.append(filter);
+    filterRow.append(filter);
+    const ratioBar = el('div', null, 'barter-ratio-control');
+    const ratioLabel = el('label', text('ratio_filter_label')); ratioLabel.htmlFor = 'barter-ratio-filter';
+    const ratioFilter = el('select'); ratioFilter.id = 'barter-ratio-filter';
+    for (const value of ['all', 'below', 'equal', 'above', 'no_history']) {
+      const option = el('option', text(`ratio_filter_${value}`)); option.value = value; ratioFilter.append(option);
+    }
+    ratioFilter.value = 'all'; ratioFilter.title = text('ratio_filter_help');
+    ratioFilter.addEventListener('change', showRows);
+    ratioBar.append(ratioLabel, ratioFilter); filterRow.append(ratioBar); resultControls.append(filterRow);
+    const recordedLabel = el('label', null, 'barter-recorded-toggle');
+    const recorded = el('input'); recorded.type = 'checkbox'; recorded.id = 'barter-show-recorded';
+    recorded.checked = false; recorded.addEventListener('change', showRows);
+    recordedLabel.append(recorded, el('span', text('show_recorded')));
+    resultControls.append(recordedLabel); root.append(resultControls); syncSelection();
     for (const [id, className] of [['barter-errors', 'barter-warning'], ['barter-results', 'barter-table-wrap']]) {
       const node = el('div', '', className); node.id = id; root.append(node);
     }
     $('barter-errors').setAttribute('role', 'status');
   }
+  function closeChoices() {
+    choiceIndex = -1; $('barter-choices').replaceChildren();
+    $('barter-suggestions').hidden = true;
+    $('barter-search').removeAttribute('aria-activedescendant');
+    $('barter-search').setAttribute('aria-expanded', 'false');
+  }
+  function highlightChoice(index) {
+    const buttons = Array.from($('barter-choices').querySelectorAll('button'));
+    choiceIndex = index;
+    buttons.forEach((button, i) => {
+      button.classList.toggle('barter-choice-active', i === index);
+      button.setAttribute('aria-selected', String(i === index));
+    });
+    const active = buttons[index];
+    if (active) {
+      $('barter-search').setAttribute('aria-activedescendant', active.id);
+      active.scrollIntoView({ block: 'nearest' });
+    }
+  }
   function showChoices() {
     const query = $('barter-search').value.trim().toLowerCase();
-    const choices = $('barter-choices'); choices.replaceChildren();
+    const choices = $('barter-choices'); closeChoices();
     if (!query || !data) { $('barter-match-count').textContent = ''; return; }
     const matches = window.BarterSearch.search(data.items, query);
+    $('barter-suggestions').hidden = $('barter-search').hidden;
+    $('barter-search').setAttribute('aria-expanded', String(matches.length > 0));
     $('barter-match-count').textContent = text('matches', { n: matches.length });
     for (const { item, score } of matches) {
       const button = el('button', null, 'barter-choice');
+      button.id = `barter-choice-${choices.children.length}`; button.type = 'button';
+      button.tabIndex = -1;
+      button.setAttribute('role', 'option'); button.setAttribute('aria-selected', 'false');
       button.dataset.matchScore = String(score);
       const icon = image(item); if (icon) button.append(icon);
       button.append(el('span', `${item.text} (${item.apiId || item.id})`));
@@ -129,8 +210,9 @@
       button.title = item.id;
       button.addEventListener('click', () => {
         selectedId = item.id;
+        editingSelection = false;
         $('barter-search').value = '';
-        choices.replaceChildren();
+        closeChoices(); $('barter-match-count').textContent = '';
         showSelected(item);
         load();
       });
@@ -141,19 +223,28 @@
     const root = $('barter-results'); root.replaceChildren();
     if (!data || !selectedId || data.unavailable || busy || data.selectedId !== selectedId) return;
     const query = $('barter-filter').value.trim().toLowerCase();
+    const ratioFilter = $('barter-ratio-filter').value;
     const rows = window.BarterSort.sortRows(data.rows.filter((row) =>
-      window.BarterSearch.score(row.target, query) != null), direction);
+      ($('barter-show-recorded').checked || row.activity === 'traded') &&
+      window.BarterSearch.score(row.target, query) != null &&
+      window.BarterPresentation.matchesAverageRatio(row, mode, ratioFilter)), direction, sortKey);
     const selected = data.items.find((item) => item.id === selectedId);
     const selectedName = selected ? selected.text : selectedId;
     if (!rows.length) { root.append(el('p', text(data.rows.length ? 'filtered' : 'empty'), 'barter-empty')); return; }
     const table = el('table', null, 'barter-table'), head = el('thead'), header = el('tr');
-    for (const key of ['target', 'rate', 'value', 'average_ratio', 'activity']) {
+    for (const key of ['target', 'rate', 'value', 'average_ratio', 'trading_volume', 'activity']) {
       const th = el('th');
-      if (key === 'value') {
-        th.setAttribute('aria-sort', direction === 'asc' ? 'ascending' : 'descending');
-        const sort = el('button', `${text(modeKey(key))} ${direction === 'asc' ? '↑' : '↓'}`, 'mini-btn');
-        sort.addEventListener('click', () => { direction = direction === 'asc' ? 'desc' : 'asc'; showRows(); });
-        sort.title = text(modeKey('value_help'));
+      if (['value', 'target', 'trading_volume'].includes(key)) {
+        th.setAttribute('aria-sort', sortKey !== key ? 'none' : direction === 'asc' ? 'ascending' : 'descending');
+        const arrow = sortKey === key ? ` ${direction === 'asc' ? '↑' : '↓'}` : '';
+        const sort = el('button', `${text(key === 'trading_volume' ? key : modeKey(key))}${arrow}`, 'mini-btn');
+        sort.addEventListener('click', () => {
+          direction = sortKey === key ? (direction === 'asc' ? 'desc' : 'asc') :
+            key === 'trading_volume' ? 'desc' : 'asc';
+          sortKey = key; showRows();
+        });
+        sort.title = text(key === 'value' ? modeKey('value_help') :
+          key === 'trading_volume' ? 'volume_sort_help' : 'target_sort_help');
         th.append(sort);
       } else th.textContent = text(['target', 'rate'].includes(key) ? modeKey(key) : key);
       if (key === 'rate') th.title = text(modeKey('rate_help'), { selected: selectedName });
@@ -180,10 +271,34 @@
         paid: mode === 'buy' ? row.target.text : selectedName,
         rounded: ratio.approximate ? text('rounded') : ''
       }) : rate.title;
-      tr.append(name, rate, value, volume, el('td', text(row.activity)));
+      const activity = el('td', text(row.activity)); activity.title = text('activity_help');
+      tr.append(name, rate, value, volume, tradeVolume(row, selectedName), activity);
       body.append(tr);
     }
     table.append(body); root.append(table);
+  }
+  function tradeVolume(row, selectedName) {
+    const units = row.tradedQuantityB, other = row.tradedQuantityA;
+    const compact = (value) => window.TradeVolume.formatQuantity(value, window.t);
+    const cell = el('td', compact(units), 'barter-trading-volume');
+    if (units >= 500) cell.classList.add('hot');
+    const heading = text('trading_volume_window', { hours: history });
+    const lines = [
+      text('trading_volume_units', { units: compact(units), item: row.target.text }),
+      text('trading_volume_against', { units: compact(other), item: selectedName }),
+      text('trading_volume_help')
+    ];
+    cell.title = [heading, ...lines].join('\n');
+    if (window.attachTip) window.attachTip(cell, () => {
+      const tip = el('div');
+      tip.append(el('div', heading, 'tip-head'));
+      for (const line of lines) {
+        const step = el('div', null, 'tip-step');
+        step.append(el('span', '·'), el('span', line)); tip.append(step);
+      }
+      return tip.innerHTML;
+    });
+    return cell;
   }
   async function load() {
     mount();
@@ -216,7 +331,7 @@
       data = null;
       pendingCapture = null;
       $('barter-errors').textContent = text('error', { error: err.message });
-      $('barter-choices').replaceChildren();
+      closeChoices();
     } finally {
       if (token === requestId) { busy = false; $('barter-refresh').disabled = false; }
     }
@@ -225,7 +340,9 @@
     if (!data || !selectedId || busy) return;
     try {
       const blob = new Blob([JSON.stringify({
-        ...data, mode, exportedAt: Date.now(), targetFilter: $('barter-filter').value, sortDirection: direction,
+        ...data, mode, exportedAt: Date.now(), targetFilter: $('barter-filter').value,
+        averageRatioFilter: $('barter-ratio-filter').value,
+        showRecordedWithoutTrades: $('barter-show-recorded').checked, sortKey, sortDirection: direction,
         displayOrientation: mode === 'buy' ? 'rate: row paid per selected bought; average ratio: selected bought : row paid' :
           'rate: row received per selected sold; average ratio: row received : selected sold'
       }, null, 2)], { type: 'application/json' });
@@ -258,6 +375,7 @@
       const matches = window.ExchangeItemLookup.clipboardMatches(raw, data.items, parsedName);
       if (!matches.length) { captureNotice(text('copy_unsupported')); return; }
       $('barter-search').value = matches.length === 1 ? matches[0].text : parsedName || matches[0].text.replace(/ \(Level \d+\)$/, '');
+      editingSelection = true; syncSelection();
       $('barter-search').focus(); showChoices();
       captureNotice(matches.length > 1 ? text('copy_ambiguous') : '');
     } catch (err) {
@@ -267,16 +385,16 @@
   window.DirectBarter = {
     active: () => $('tab-barter').classList.contains('active'),
     capture,
-    copyFailed() { mount(); captureNotice(text('copy_failed')); },
+    copyFailed() { mount(); editingSelection = true; syncSelection(); captureNotice(text('copy_failed')); },
     render() {
       mount();
       if (!busy && (!data || Math.floor(data.fetchedAt / 3600000) !== Math.floor(Date.now() / 3600000))) load();
     },
-    refresh: load,
+    refresh() { if (!busy) return load(); },
     leagueChanged() {
       ++requestId; pendingCapture = null; data = null; busy = false;
       if (mounted) {
-        $('barter-results').replaceChildren(); $('barter-choices').replaceChildren();
+        $('barter-results').replaceChildren(); closeChoices();
         $('barter-league').textContent = '';
         $('barter-export').disabled = true;
         $('barter-errors').textContent = '';
@@ -285,11 +403,11 @@
     }
   };
   if (window.api.onBarterFocusSearch) window.api.onBarterFocusSearch(() => {
-    if (window.DirectBarter.active()) { mount(); $('barter-search').focus(); }
+    if (window.DirectBarter.active()) beginSearch();
   });
   document.addEventListener('keydown', (event) => {
     if (event.ctrlKey && event.key.toLowerCase() === 'f' && window.DirectBarter.active()) {
-      event.preventDefault(); mount(); $('barter-search').focus();
+      event.preventDefault(); beginSearch();
     }
   });
   document.addEventListener('paste', (event) => {
