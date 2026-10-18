@@ -6,6 +6,32 @@
 // each cut; the popup and the history viewer both read from here automatically.
 window.RELEASE_NOTES = [
   {
+    version: '3.0.7-barter.1',
+    date: '2026-10-18',
+    title: "Direct Barter, better item search, and less wasted space.",
+    notes: [
+      "Direct Barter:",
+      "New tab: pick an exchange item and see what it traded directly against in your selected league over the last 3 or 24 completed hours.",
+      "Switch between Buy and Sell. Average ratios use the game's buying:selling order, scaled for easy comparison. Your mode is remembered.",
+      "Normalization through Exalted value. Direct historical values, estimates, and unpriced items are labelled separately.",
+      "Filter by item name or average ratio: below 1:1, exactly 1:1, above 1:1, or no historical ratio.",
+      "Trading volume shows item quantitie",
+      "Historical Trade Activity separates items that traded from recorded listing without trades. Tick \"Show recorded markets without historical trades\" to include those rows.",
+      "These are historical markets, not live offers. Current availability is unknown. Missing hours, stale data, and unavailable history are called out.",
+      "Export results in JSON",
+      "Hide, restore, and reorder Direct Barter like the other tabs. Tab visibility, order, and your last open tab are remembered.",
+      "Search and controls:",
+      "Search accepts partial or reordered words, common typos, and exact gem levels. \"Unc 8\" finds level 8 gems, not level 18.",
+      "Use Up/Down arrows to move through search results, Enter to select, and Escape to close them.",
+      "The main refresh button refreshes Direct Barter too, without resetting your selection, filters, or sorting.",
+      "With Direct Barter active, the item hotkey fills search from a copied game item. In the focused overlay, Ctrl+F opens search instead. Other tabs keep their usual Price Check behavior.",
+      "Game exchange entries don't support copying, even with Ctrl+C. Failed copies explain how to search manually instead.",
+      "App-wide:",
+      "The welcome tutorial stays dismissed after hiding the overlay or restarting. You can still replay it from Settings.",
+      "The fork has its own settings and cache, separate from the main app. Upstream automatic updates, feedback, and sample uploads are currently disabled.",
+    ],
+  },
+  {
     version: '3.0.7',
     date: '2026-09-18',
     notes: [

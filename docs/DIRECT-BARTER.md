@@ -6,12 +6,59 @@ league selected in Settings and the last 3 completed hours (or 24 hours).
 Typing `Rune` offers individual choices; it never creates a synthetic Rune item.
 Target filtering provides pair-specific lookup.
 
+The compact header keeps **Historical markets**, the league and unknown-current-
+availability warning on one wrapping context line. Sell/Buy, the item picker,
+3h/24h history, Refresh and Export share a wrapping toolbar. After selection, a
+compact item/name/icon control replaces the search field; **Change** or Ctrl+F
+reopens search without clearing the selection or fetching data, and Escape
+returns to the selected item. Suggestions overlay the results instead of
+pushing them downward. Clearing the item restores the search-only state.
+Target/ratio filters, the recorded-markets checkbox and Export are hidden until
+an item is selected. Empty suggestions/status messages reserve no vertical space.
+
+The **Average trade ratio** dropdown filters rows below, exactly at, or above
+1:1 in the displayed buying:selling direction, or shows only rows with no
+historical ratio. **All ratios** includes every row admitted by the activity
+checkbox. Comparisons use original quantities before display rounding and
+compose with the target text filter and Exalted, volume or alphabetical item-name
+sorting. Switching Buy/Sell reapplies the filter without fetching data.
+JSON export retains every recorded neighbor and records `averageRatioFilter`,
+`showRecordedWithoutTrades`, `sortKey` and `sortDirection` separately, just like
+the target filter. Clearing the selected item resets the filters and hides
+zero-trade rows again.
+
+**Historical Trade Activity** distinguishes **Item was traded** from **Item
+listed**. The latter means a market was recorded historically without a valid
+traded rate, not that an offer is currently available. Such rows are still
+gathered and exported, but are hidden until **Show recorded markets without
+historical trades** is checked. The checkbox combines with text/ratio filters
+and does not refetch data.
+
+**Trading volume** shows total units of the row item traded in the covered
+3/24-hour history, using the Currency tab's shared `k`/`m` formatter, highlighted
+high volumes and shared hover-tooltip styling. The tooltip names both item
+quantities. Buy/Sell changes who pays, not these historical per-item totals.
+Only records with valid positive quantities on both sides contribute to these
+totals (`tradedQuantityA`/`tradedQuantityB` in JSON). This is **not a transaction
+count**: the public feed and main app do not expose the number of individual
+trades. Partial/stale coverage warnings still apply to volume.
+Click **Trading volume** to show the highest quantities first, then click again
+for the lowest first. Sorting uses raw quantities, never abbreviated strings;
+unknown or invalid volume stays last in both directions. Sorting is retained
+through Buy/Sell changes and refresh, and is recorded in the JSON export.
+
+The title-bar refresh button refreshes both Currency and Direct Barter,
+regardless of the visible tab. It preserves the selected item, history window,
+Buy/Sell mode, filters and sorting. Repeated general refreshes do not start
+overlapping Direct Barter requests; its own Refresh button remains available.
+Completed cached hours are reused, not forcibly downloaded again.
+
 Use **I want to Sell / Buy** to choose the direction. Sell selects the item you
 give; rows are the items you receive. Buy selects the item you want; rows are the
 items you pay with. Mode is saved in the fork profile and changing it rerenders
 the already covered data without making a new history request.
 
-**Historical / Recent recorded markets** is intentional. These are hourly
+**Historical markets** is intentional. These are hourly
 digests, not executable bids/asks, spread, current inventory, or a guarantee that
 you can trade now. The latest observation is the start of the newest recorded
 hour, not an exact trade timestamp. Fetched/checked time is separate; raw records
@@ -53,12 +100,35 @@ documentation.
 
 Only official sources were used: `nodejs.org` with its published SHA-256
 checksum, `registry.npmjs.org`, and the packages' maintainers' release artifacts.
-No installers were produced. The fork profile/cache is under
+The fork profile/cache is under
 `%APPDATA%\POE2 Direct Barter Fork`, separate from the installed upstream app.
+
+### Windows installer
+
+The local Windows x64 installer for **3.0.7-barter.1** is
+`dist\POE2-Direct-Barter-Fork-Setup.exe`. It installs per user and creates desktop
+and Start Menu shortcuts; the installed app does not require Node/npm.
+It is unsigned, so Windows may show a SmartScreen warning. Upstream automatic
+updates remain disabled. No installer has been published.
+
+To rebuild locally without publishing:
+
+```powershell
+npm.cmd run dist -- --publish never
+```
+
+The packaged executable is
+`dist\win-unpacked\POE2 Direct Barter Fork.exe`. Its startup, native dependency
+loading, Direct Barter controls and matching release-notes version were checked
+using an isolated temporary profile. The archive includes the root GPL license,
+vendored EE2 MIT notice, README and privacy statement. The installer itself has
+not yet been installed/uninstalled for acceptance testing. Installation,
+shortcuts, settings persistence and in-game hotkeys still need manual review
+before distribution. Exit the upstream overlay before testing shared hotkeys.
 
 ## Manual review checklist
 
-1. Open Direct Barter. Confirm **Historical / Recent recorded markets**, the
+1. Open Direct Barter. Confirm **Historical markets**, the
    explicit league and default 3-hour window. Current
    availability must be described as unknown.
 2. Type `Rune`. Confirm multiple specific entries and no automatic selection.
@@ -68,6 +138,10 @@ No installers were produced. The fork profile/cache is under
    Skill and Spirit gems at level 8, not 18. A `Metadata/...` query performs a
    literal ID lookup. The same token rules apply to the row filter. Fuzzy
    candidates are ranked; low-confidence matches never auto-select on Enter.
+   Use Up/Down arrows to highlight a choice and Enter to explicitly select it,
+   including a fuzzy candidate. Navigation wraps and scrolls the active choice
+   into view without moving focus out of the search field. Escape closes the
+   choices; editing the query clears the highlighted choice.
    Choose **Greater Storm Rune**. Look for **Greater Iron Rune** using the target
    filter. The real 2026-10-04 15:00 UTC Forbidden Rites digest recorded this
    pair at 1:1. It may disappear in future windows; choose an actually recorded
@@ -85,6 +159,7 @@ No installers were produced. The fork profile/cache is under
    the game's buying:selling order: selected bought : row paid in Buy,
    row received : selected sold in Sell. The smaller side is 1, the other
    rounded to two decimals with trailing zeros removed. Hover for named items.
+   **Receive item / Pay with** sorts alphabetically in either direction.
    The sortable Exalted column always values ONE row item.
    Click **Exalted per receive item** twice. Check ascending then descending,
    with **Unpriced** last both ways. This is the value of ONE receive item, not
@@ -92,11 +167,13 @@ No installers were produced. The fork profile/cache is under
    unit** badges identify valuation provenance. Rare items/windows may be
    needed to see an estimate or unpriced target; automated fixtures exercise
    both deterministically.
-5. Find a recorded zero-volume result if present. It must remain listed with
+5. Check **Show recorded markets without historical trades** to reveal a recorded
+   zero-volume result if present. It must remain available with
    **No Historical record** in rate/ratio columns instead of a fabricated traded
    rate. This wording means there is no valid historical traded rate, not that
    the market itself is absent. Activity distinguishes
-   positive traded quantities from recorded/no valid traded rate.
+   **Item was traded** from historical **Item listed**. Uncheck the box and
+   confirm the latter rows disappear without a request, but remain in JSON.
 6. Switch Settings league and return to Direct Barter. Confirm the displayed
    league and results change, without mixing old-league rows. Switch to 24
    hours and Refresh. Missing coverage/stale/errors must remain visible; precise
@@ -134,13 +211,24 @@ No installers were produced. The fork profile/cache is under
     paste the game's copied item text there. Outside Barter, the hotkey still opens
     Price Check. Actual in-game capture requires your normal copy-capable game
     context; automated tests cover the received events, not game interaction.
+    Some entries in the game's exchange window do not support even manual
+    Ctrl+C; the hotkey cannot extract text that the game does not copy. In that
+    case the UI explains the limitation and directs you to type the name or
+    copy an inventory/stash item. Failed Barter capture never substitutes old
+    inventory clipboard text; the existing manual-clipboard fallback outside
+    Barter is unchanged.
 
 ## Icon repair and mode semantics
 
 The CX currency catalog had legacy uncut-gem icon URLs returning **404**, but
 the main app's vendored EE2 item database already has the working level-specific
 official `/gen/image/...` URLs. Barter and the Price Check currency card now share
-that exact item lookup, falling back to the existing main currency catalog.
+that exact item lookup across both the `ITEM` and `GEM` namespaces, preferring
+the matching API identity before falling back to the existing main currency
+catalog.
+Lineage support gems such as Vilenta's Propulsion, Uruk's Smelting and Arakaali's
+Lust live in `GEM`, not `ITEM`; checking only `ITEM` incorrectly fell through to
+legacy art URLs returning 404 despite working icons already in the main app.
 There is no Barter-specific dynamic icon pool, family URL table or icon download
 pack. The selected card and rows use the same resolver. Actual EE2 database
 lookups and real Electron image decoding are checked without changing identity
@@ -149,6 +237,16 @@ Scout enrichment can also resolve a recorded endpoint by its exact
 `BaseItemTypeId`, even when the bundled map lacks that ID. Missing metadata
 fields fall back individually to the bundled catalog. Genuine unknown/broken
 icons leave a reserved `?` slot rather than shifting the item text.
+
+The picker includes **Lesser Essence of the Mind** and **Lesser Rebirth Rune**
+from the bundled catalog even without Scout metadata or a recorded market in
+the chosen window. Their exact IDs are `CurrencyLesserEssenceMana` under
+`Metadata/Items/Currency/` and `RuneLifeRecoveryLesser` under
+`Metadata/Items/SoulCores/`. Scout entries with an explicit `BaseItemTypeId` can
+also extend the picker; names alone never establish identity. Selecting any
+catalog item still shows only its original GGG-recorded neighbors. Catalog
+regeneration retains previously known entries and API IDs instead of removing
+items absent from its single sampled hour.
 
 For a recorded `162 Greater Iron Rune / 41 Divine Orb` traded total,
 Sell Iron Rune means approximately `0.253086 Divine Orb` received per Rune;

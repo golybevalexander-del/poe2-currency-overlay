@@ -78,6 +78,9 @@ class BarterService {
     try { await this.provider.prune(); } catch (err) { errors.push({ source: 'cache', error: `Cache pruning failed: ${err.message}` }); }
     const graph = scan(covered, league, mapping, catalog, metadata.items);
     const items = new Map(Object.keys(mapping).map((id) => [id, resolveItem(id, mapping, catalog, metadata.items)]));
+    for (const id of Object.keys(metadata.items)) {
+      if (id.startsWith('Metadata/')) items.set(id, resolveItem(id, mapping, catalog, metadata.items));
+    }
     for (const item of graph.items) items.set(item.id, item);
     return {
       schemaVersion: 1, source: 'GGG historical Currency Exchange digests',

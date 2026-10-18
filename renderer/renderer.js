@@ -132,10 +132,7 @@ function makeSpark(series) {
 }
 
 function fmtQty(q) {
-  if (q == null) return '-';
-  if (q >= 1e6) return t('currency.fmt.million_suffix', { value: (q / 1e6).toFixed(1) });
-  if (q >= 1e3) return t('currency.fmt.thousand_suffix', { value: (q / 1e3).toFixed(1) });
-  return String(q);
+  return window.TradeVolume.formatQuantity(q, t);
 }
 
 function sparkTooltipHtml(series, itemText, baseText, baseIsExalt) {
@@ -3621,8 +3618,9 @@ async function main() {
   });
 
   $('btn-refresh').addEventListener('click', () => {
-    if ($('tab-barter').classList.contains('active') && window.DirectBarter) window.DirectBarter.refresh();
-    else { logAction('refresh (manual)'); refresh(true); }
+    logAction('refresh (manual)');
+    refresh(true);
+    if (window.DirectBarter) window.DirectBarter.refresh();
   });
   $('btn-hide').addEventListener('click', () => window.api.hide());
   // the nav rail is a SWITCHER, not a scroll-jump: it shows one section card at a
